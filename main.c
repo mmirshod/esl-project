@@ -48,15 +48,18 @@
  *
  */
 
+
+/**
+ * @brief Function for application main entry.
+ */
+
+#if 0
 #include <stdbool.h>
 #include <stdint.h>
 #include "nrf_delay.h"
 #include "boards.h"
 #include <stdio.h>
 
-/**
- * @brief Function for application main entry.
- */
 int main(void)
 {
     /* Configure board. */
@@ -82,3 +85,91 @@ int main(void)
         }
     }
 }
+#else
+#include "nrf_gpio.h"
+
+typedef enum {
+    SW1         =   NRF_GPIO_PIN_MAP(1,6),   // P1.06
+    LED1        =   NRF_GPIO_PIN_MAP(0,6),   // P0.06
+    LED2_R      =   NRF_GPIO_PIN_MAP(0,8),   // P0.08
+    LED2_G      =   NRF_GPIO_PIN_MAP(1,9),   // P1.09
+    LED2_B      =   NRF_GPIO_PIN_MAP(0,12),  // P0.12
+    NOT_FOUND   =   -1
+} nrf_528400_io_pin_t;
+
+void cfg_pins() {
+    nrf_gpio_cfg_output(LED1);
+    nrf_gpio_cfg_output(LED2_R);
+    nrf_gpio_cfg_output(LED2_G);
+    nrf_gpio_cfg_output(LED2_B);
+    nrf_gpio_cfg_input(SW1, NRF_GPIO_PIN_PULLUP);
+}
+
+void led_on(nrf_528400_io_pin_t pin) {
+    nrf_gpio_pin_write(pin, 0);
+}
+
+/**
+ * @brief Function to turn of all LED pins 
+*/
+void led_off() {
+    nrf_gpio_pin_write(LED1, 1);
+    nrf_gpio_pin_write(LED2_R, 1);
+    nrf_gpio_pin_write(LED2_G, 1);
+    nrf_gpio_pin_write(LED2_B, 1);
+}
+
+void led_off(nrf_528400_io_pin_t pin) {
+    nrf_gpio_pin_write(pin, 1);
+}
+
+void led_invert(nrf_528400_io_pin_t pin) {
+    nrf_gpio_pin_write(pin, !nrf_gpio_pin_read(pin));
+}
+
+bool is_pressed(nrf_528400_io_pin_t pin) {
+    return !(nrf_gpio_pin_read(pin) && 1);
+}
+
+nrf_528400_io_pin_t get_pin (char color) {
+    switch (color)
+    {
+    case 'r':
+    case 'R':
+        return LED2_R;
+    
+    case 'g':
+    case 'G':
+        return LED2_G;
+    
+    case 'b':
+    case 'B':
+        return LED2_B;
+
+    default:
+        return NOT_FOUND;
+    }
+}
+
+
+
+int main(int argc, char const *argv[])
+{
+    char* seq = "RRGGGB";
+    cfg_pins();
+    
+
+    while (true)
+    {
+        while (is_pressed(SW1)) {
+            nrf_528400_io_pin_t led_pin = get_pin(*seq);  // GET PIN NO OF THE CURRENT COLOR
+            if (led_pin != NOT_FOUND) {
+                led_off();  // TURN OF ALL COLORS
+                led_on(led_pin);
+            }
+            seq++;  // GO TO NEXT COLOR
+        }
+    }
+    return 0;
+}
+#endif
