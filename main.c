@@ -87,6 +87,18 @@ int main(void)
 }
 #else
 #include "nrf_gpio.h"
+#include "nrf_timer.h"
+// #include "nrf.h"
+// #include "nrf52840.h"
+#include "nrf_delay.h"
+#include <stdint.h>
+// #include <stdint-gcc.h>
+#include <string.h>
+
+
+/**
+ * GPIO Related Functions
+ */
 
 typedef enum {
     SW1         =   NRF_GPIO_PIN_MAP(1,6),   // P1.06
@@ -105,18 +117,19 @@ void cfg_pins() {
     nrf_gpio_cfg_input(SW1, NRF_GPIO_PIN_PULLUP);
 }
 
-void led_on(nrf_528400_io_pin_t pin) {
-    nrf_gpio_pin_write(pin, 0);
-}
-
 /**
  * @brief Function to turn of all LED pins 
 */
-void led_off() {
+void led_off_all() {
     nrf_gpio_pin_write(LED1, 1);
     nrf_gpio_pin_write(LED2_R, 1);
     nrf_gpio_pin_write(LED2_G, 1);
     nrf_gpio_pin_write(LED2_B, 1);
+}
+
+void led_on(nrf_528400_io_pin_t pin) {
+    led_off_all();
+    nrf_gpio_pin_write(pin, 0);
 }
 
 void led_off(nrf_528400_io_pin_t pin) {
@@ -153,21 +166,78 @@ nrf_528400_io_pin_t get_pin (char color) {
 
 
 
+/**
+ * TIMER RELATED FUNCTIONS
+ */
+
+NRF_TIMER_Type* p_timer = NULL;  // Pointer to NRF_TIMER_Type
+
+void cfg_timer(int timer_no) {
+    // SELECT APPROPRIATE TIMER
+    switch (timer_no) {
+        case 0:
+            p_timer = NRF_TIMER0;
+            break;
+        case 1:
+            p_timer = NRF_TIMER1;
+            break;
+        case 2:
+            p_timer = NRF_TIMER2;
+            break;
+        case 3:
+            p_timer = NRF_TIMER3;
+            break;
+        case 4:
+            p_timer = NRF_TIMER4;
+            break;
+        default:
+            break;
+    }
+
+    // Configure Timer
+    nrf_timer_mode_set(p_timer, NRF_TIMER_MODE_TIMER);
+    nrf_timer_bit_width_set(p_timer, NRF_TIMER_BIT_WIDTH_24);
+    nrf_timer_frequency_set(p_timer, NRF_TIMER_FREQ_1MHz);
+    nrf_timer_task_trigger(p_timer, NRF_TIMER_TASK_STOP);
+    nrf_timer_task_trigger(p_timer, NRF_TIMER_TASK_CLEAR);
+}
+
+void wait(uint32_t seconds) {
+    uint32_t ticks_to_wait = nrf_timer_ms_to_ticks((seconds * 1000), NRF_TIMER_FREQ_31250Hz);
+    nrf_timer_cc_write(p_timer, NRF_TIMER_CC_CHANNEL0, ticks_to_wait);
+    nrf_timer_event_clear(p_timer, NRF_TIMER_EVENT_COMPARE0);
+
+    nrf_timer_task_trigger(p_timer, NRF_TIMER_TASK_CLEAR);
+    nrf_timer_task_trigger(p_timer, NRF_TIMER_TASK_START);
+
+    while (nrf_timer_event_check(p_timer, NRF_TIMER_EVENT_COMPARE0) == false) {}
+
+    nrf_timer_task_trigger(p_timer, NRF_TIMER_TASK_STOP);
+    nrf_timer_event_clear(p_timer, NRF_TIMER_EVENT_COMPARE0);
+}
+
+
+
+
+
 int main(int argc, char const *argv[])
 {
-    char* seq = "RRGGGB";
+    char* color_sequence = "RRGGGB";
+    size_t color_sequence_length = strlen(color_sequence);
+
     cfg_pins();
-    
+    led_off_all();
 
     while (true)
     {
         while (is_pressed(SW1)) {
-            nrf_528400_io_pin_t led_pin = get_pin(*seq);  // GET PIN NO OF THE CURRENT COLOR
-            if (led_pin != NOT_FOUND) {
-                led_off();  // TURN OF ALL COLORS
-                led_on(led_pin);
+            nrf_528400_io_pin_t led_pin = get_pin(*color_sequence);  // GET PIN NO OF THE CURRENT COLOR
+            led_on(led_pin);
+            nrf_delay_ms(1000);  // wait 1 second
+            color_sequence++;  // GO TO NEXT COLOR
+            if (*color_sequence == '\0') {
+                color_sequence -= color_sequence_length;
             }
-            seq++;  // GO TO NEXT COLOR
         }
     }
     return 0;
