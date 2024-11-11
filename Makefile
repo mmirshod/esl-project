@@ -32,6 +32,8 @@ SRC_FILES += \
   $(SDK_ROOT)/modules/nrfx/soc/nrfx_atomic.c \
   $(PROJ_DIR)/main.c \
   $(SDK_ROOT)/modules/nrfx/mdk/system_nrf52840.c \
+<<<<<<< HEAD
+=======
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_systick.c \
   $(SDK_ROOT)/components/libraries/timer/app_timer2.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_gpiote.c \
@@ -42,6 +44,7 @@ SRC_FILES += \
   $(SDK_ROOT)/integration/nrfx/legacy/nrf_drv_clock.c
 
 
+>>>>>>> Workshop 4 finished. Closes #3
 
 # Include folders common to all targets
 INC_FOLDERS += \
@@ -52,7 +55,11 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/libraries/strerror \
   $(SDK_ROOT)/components/toolchain/cmsis/include \
   $(SDK_ROOT)/components/libraries/util \
+<<<<<<< HEAD
+  ./config \
+=======
   $(PROJ_DIR)/config \
+>>>>>>> Workshop 4 finished. Closes #3
   $(SDK_ROOT)/components/libraries/balloc \
   $(SDK_ROOT)/components/libraries/ringbuf \
   $(SDK_ROOT)/modules/nrfx/hal \
@@ -68,11 +75,14 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/libraries/memobj \
   $(SDK_ROOT)/external/fprintf \
   $(SDK_ROOT)/components/libraries/log/src \
+<<<<<<< HEAD
+=======
   $(SDK_ROOT)/components/libraries/timer \
   $(SDK_ROOT)/components/libraries/sortlist \
   $(SDK_ROOT)/modules/nrfx/drivers/include \
   $(SDK_ROOT)/components/libraries/atomic_fifo \
   $(SDK_ROOT)/integration/nrfx/legacy
+>>>>>>> Workshop 4 finished. Closes #3
 
 # Libraries common to all targets
 LIB_FILES += \
@@ -97,7 +107,10 @@ CFLAGS += -mfloat-abi=hard -mfpu=fpv4-sp-d16
 # keep every function in a separate section, this allows linker to discard unused ones
 CFLAGS += -ffunction-sections -fdata-sections -fno-strict-aliasing
 CFLAGS += -fno-builtin -fshort-enums
+<<<<<<< HEAD
+=======
 CFLAGS += -DAPP_TIMER_V2 -DAPP_TIMER_V2_RTC1_ENABLED
+>>>>>>> Workshop 4 finished. Closes #3
 
 # C++ flags common to all targets
 CXXFLAGS += $(OPT)

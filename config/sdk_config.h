@@ -37,6 +37,12 @@
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+<<<<<<< HEAD
+
+
+
+=======
+>>>>>>> Workshop 4 finished. Closes #3
 #ifndef SDK_CONFIG_H
 #define SDK_CONFIG_H
 // <<< Use Configuration Wizard in Context Menu >>>\n
