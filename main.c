@@ -18,8 +18,20 @@
 #define DEBOUNCE_DELAY              APP_TIMER_TICKS(DEBOUNCE_DELAY_MS)
 #define DOUBLE_CLICK_DELAY          APP_TIMER_TICKS(DOUBLE_CLICK_DELAY_MS)
 
-static  bool    main_loop_active        =   false;
-static  bool    awaiting_second_click   =   false;
+static  volatile    bool    awaiting_second_click   =   false;
+
+typedef enum {
+    NO_INPUT    =   0,
+    HUE         =   1,
+    SATURATION  =   2,
+    BRIGHTNESS  =   3,
+} esl_in_mode_t;
+
+static volatile esl_in_mode_t current_input_mode = NO_INPUT;
+
+static int brightness = 100;
+static int saturation = 100;
+static int hue = 360 * 0.63;
 
 typedef enum {
     SW1         =   NRF_GPIO_PIN_MAP(1,6),   // P1.06
@@ -98,8 +110,10 @@ void debounce_timeout_handler(void *p_context) {
         app_timer_start(double_click_timer_id, DOUBLE_CLICK_DELAY, NULL);
     } else {
         // Second click detected within the delay
-        main_loop_active = !main_loop_active;  // Toggle main loop active state
         awaiting_second_click = false;
+        if (current_input_mode++ == BRIGHTNESS) {
+            current_input_mode = NO_INPUT;
+        }
         app_timer_stop(double_click_timer_id);  // Stop double-click timer
     }
 }
