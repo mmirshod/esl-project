@@ -6,6 +6,11 @@
 #include "nrfx_clock.h"
 #include "nrf_drv_clock.h"
 
+// #include "nrf_log.h"
+// #include "nrf_log_ctrl.h"
+// #include "nrf_log_default_backends.h"
+// #include "nrf_log_backend_usb.h"
+
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
@@ -29,6 +34,11 @@ typedef enum {
     LED_B       =   NRF_GPIO_PIN_MAP(0,12),  // P0.12
     NOT_FOUND   =   -1
 } esl_io_pin_t;
+
+// void logs_init() {
+//     NRF_LOG_INIT(NULL);
+//     NRF_LOG_DEFAULT_BACKENDS_INIT();
+// }
 
 void cfg_pins() {
     nrf_gpio_cfg_output(LED1);
@@ -141,14 +151,20 @@ void led_pwm_control(esl_io_pin_t pin, uint32_t freq, uint8_t duty_cycle) {
     led_on(pin);
     nrfx_systick_get(&systick_context);
     while (!nrfx_systick_test(&systick_context, on_time * 1000)) {
-        if (!main_loop_active) return;
+        if (!main_loop_active) {
+            led_off(LED1);
+            return;
+        }
     }
 
     // PWM OFF phase
     led_off(pin);
     nrfx_systick_get(&systick_context);
     while (!nrfx_systick_test(&systick_context, off_time * 1000)) {
-        if (!main_loop_active) return;
+        if (!main_loop_active) {
+            led_off(LED1);
+            return;
+        }
     }
 }
 
@@ -159,37 +175,49 @@ void led_sequence_loop() {
     int fade_step = 1;
 
     while (main_loop_active) {
-        if (!nrf_gpio_pin_read(SW1)) {
-            esl_io_pin_t led_pin = get_pin_by_color(*color_sequence);
-            if (led_pin != NOT_FOUND) {
-                for (; duty_cycle <= 100; duty_cycle += fade_step) {
-                    if (!main_loop_active) return;
-                    led_pwm_control(led_pin, PWM_FREQ, duty_cycle);
-                }
-                for (; duty_cycle >= 0; duty_cycle -= fade_step) {
-                    if (!main_loop_active) return;
-                    led_pwm_control(led_pin, PWM_FREQ, duty_cycle);
-                }
-            }
-            duty_cycle = 0;
+        esl_io_pin_t led_pin = get_pin_by_color(*color_sequence);
+        if (led_pin != NOT_FOUND) {
+            while (duty_cycle <= 100) {
+                if (!main_loop_active) return;
+                led_pwm_control(led_pin, PWM_FREQ, duty_cycle);
 
-            color_sequence++;
-            if (*color_sequence == '\0') {
-                color_sequence -= color_sequence_length;
+                if (!nrf_gpio_pin_read(SW1)) duty_cycle += fade_step;
             }
+            while (duty_cycle >= 0) {
+                if (!main_loop_active) return;
+                led_pwm_control(led_pin, PWM_FREQ, duty_cycle);
+                
+                if (!nrf_gpio_pin_read(SW1)) duty_cycle -= fade_step; 
+            }
+        }   
+        duty_cycle = 0;
+
+        color_sequence++;
+        if (*color_sequence == '\0') {
+            color_sequence -= color_sequence_length;
         }
     }
 }
 
 int main(void) {
+    // logs_init();
+    
+    // NRF_LOG_INFO("Initializing Timers...");
     lfclk_request();
     init_timers();
+    nrfx_systick_init();
+    // NRF_LOG_INFO("Done! Timers Inititialized.");
+
+    // NRF_LOG_INFO("Initializing Pins...");
     init_button_interrupt();
     cfg_pins();
-    nrfx_systick_init();
     led_off_all();
+    // NRF_LOG_INFO("Done! Pins Initialized.");
 
+    // NRF_LOG_INFO("Entering Main Loop...");
     while (true) {
+        // LOG_BACKEND_USB_PROCESS();
+        // NRF_LOG_PROCESS();
         led_sequence_loop();
         nrf_delay_ms(10);
     }
