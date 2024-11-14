@@ -1,6 +1,6 @@
 #include "nrf_gpio.h"
 #include "nrf_delay.h"
-#include "nrfx_systick.h"
+#include "nrfx_pwm.h"
 #include "nrfx_gpiote.h"
 #include "app_timer.h"
 #include "nrfx_clock.h"
@@ -18,7 +18,10 @@
 #define DEBOUNCE_DELAY              APP_TIMER_TICKS(DEBOUNCE_DELAY_MS)
 #define DOUBLE_CLICK_DELAY          APP_TIMER_TICKS(DOUBLE_CLICK_DELAY_MS)
 
-static  volatile    bool    awaiting_second_click   =   false;
+static volatile bool awaiting_second_click = false;
+nrfx_pwm_t pwm_instance = NRFX_PWM_INSTANCE(0);
+nrf_pwm_values_individual_t pwm_duty_cycle_values;
+nrf_pwm_sequence_t pwm_sequnce;
 
 typedef enum {
     NO_INPUT    =   0,
@@ -29,9 +32,9 @@ typedef enum {
 
 static volatile esl_in_mode_t current_input_mode = NO_INPUT;
 
-static int brightness = 100;
-static int saturation = 100;
-static int hue = 360 * 0.63;
+// static int brightness = 100;
+// static int saturation = 100;
+// static int hue = 360 * 0.63;
 
 typedef enum {
     SW1         =   NRF_GPIO_PIN_MAP(1,6),   // P1.06
@@ -96,6 +99,37 @@ void init_timers() {
     app_timer_create(&double_click_timer_id, APP_TIMER_MODE_SINGLE_SHOT, double_click_timeout_handler);
 }
 
+void pwm_handler(void);
+
+void init_pwm() {
+    nrf_delay_ms(5000);
+    led_on(LED1);
+    nrf_delay_ms(500);
+    led_off_all();
+    nrfx_pwm_config_t pwm_config = NRFX_PWM_DEFAULT_CONFIG;
+    
+    // configure output pins
+    pwm_config.output_pins[0] = LED1;
+    pwm_config.output_pins[1] = LED_R;
+    pwm_config.output_pins[2] = LED_G;
+    pwm_config.output_pins[3] = LED_B;
+
+    // configure top_value
+    pwm_config.top_value = 100;
+
+    // configure sequence
+    pwm_sequnce.values.p_individual = &pwm_duty_cycle_values;
+    pwm_sequnce.length = NRF_PWM_VALUES_LENGTH(pwm_duty_cycle_values);
+    pwm_sequnce.repeats = 0;
+    pwm_sequnce.end_delay = 0;
+
+    nrfx_pwm_init(&pwm_instance, &pwm_config, NULL);
+
+    led_on(LED1);
+    nrf_delay_ms(500);
+    led_off_all();
+}
+
 static void lfclk_request(void)
 {
     ret_code_t err_code = nrf_drv_clock_init();
@@ -106,11 +140,17 @@ static void lfclk_request(void)
 void debounce_timeout_handler(void *p_context) {
     // Start the double-click timer to detect a second click
     if (!awaiting_second_click) {
+        // led_on(LED1);
+        // nrf_delay_ms(500);
+        // led_off(LED1);
         awaiting_second_click = true;
         app_timer_start(double_click_timer_id, DOUBLE_CLICK_DELAY, NULL);
     } else {
         // Second click detected within the delay
         awaiting_second_click = false;
+        // led_on(LED_R);
+        // nrf_delay_ms(1000);
+        // led_off_all();
         if (current_input_mode++ == BRIGHTNESS) {
             current_input_mode = NO_INPUT;
         }
@@ -123,88 +163,93 @@ void double_click_timeout_handler(void *p_context) {
     awaiting_second_click = false;
 }
 
-// Works only with LED2
-esl_io_pin_t get_pin_by_color (char color) {
-    switch (color)
-    {
-    case 'r':
-    case 'R':
-        return LED_R;
-    
-    case 'g':
-    case 'G':
-        return LED_G;
-    
-    case 'b':
-    case 'B':
-        return LED_B;
+void led_sequence() {
+    static uint32_t last_blink_time = 0;
+    static bool led_state = false; // Track whether LED is on or off
 
-    default:
-        return NOT_FOUND;
-    }
-}
+    // Determine how frequently the LED blinks based on the current input mode
+    uint32_t blink_delay = 0;
 
-void led_pwm_control(esl_io_pin_t pin, uint32_t freq, uint8_t duty_cycle) {
-    
-    uint32_t period = 16000 / PWM_FREQ;
-    uint32_t on_time = (period * duty_cycle) / 100;
-    uint32_t off_time = period - on_time;
-    nrfx_systick_state_t systick_context;
-
-    // PWM ON phase
-    led_on(pin);
-    nrfx_systick_get(&systick_context);
-    while (!nrfx_systick_test(&systick_context, on_time * 1000)) {
-        if (!main_loop_active) return;
+    switch (current_input_mode) {
+        case NO_INPUT:
+            pwm_duty_cycle_values.channel_0 = 0; // LED off
+            blink_delay = 1000; // Delay for a longer period
+            break;
+        case HUE:
+            pwm_duty_cycle_values.channel_0 = 25; // 25% brightness
+            blink_delay = 500; // Blink every 500ms
+            break;
+        case SATURATION:
+            pwm_duty_cycle_values.channel_0 = 75; // 75% brightness
+            blink_delay = 200; // Blink every 200ms
+            break;
+        case BRIGHTNESS:
+            pwm_duty_cycle_values.channel_0 = 100; // Full brightness
+            blink_delay = 100; // Blink every 100ms
+            break;
+        default:
+            pwm_duty_cycle_values.channel_0 = 0; // Default to LED off
+            blink_delay = 1000; // Longer delay for default
+            break;
     }
 
-    // PWM OFF phase
-    led_off(pin);
-    nrfx_systick_get(&systick_context);
-    while (!nrfx_systick_test(&systick_context, off_time * 1000)) {
-        if (!main_loop_active) return;
-    }
-}
+    // Toggle the LED state based on time
+    uint32_t current_time = app_timer_cnt_get(); // Get current time in ticks
 
-void led_sequence_loop() {
-    static char* color_sequence = "RRGGGB";
-    size_t color_sequence_length = strlen(color_sequence);
-    static int duty_cycle = 0;
-    int fade_step = 1;
+    if (current_time - last_blink_time >= blink_delay) {
+        led_state = !led_state;  // Toggle LED state
+        last_blink_time = current_time;
 
-    while (main_loop_active) {
-        if (!nrf_gpio_pin_read(SW1)) {
-            esl_io_pin_t led_pin = get_pin_by_color(*color_sequence);
-            if (led_pin != NOT_FOUND) {
-                for (; duty_cycle <= 100; duty_cycle += fade_step) {
-                    if (!main_loop_active) return;
-                    led_pwm_control(led_pin, PWM_FREQ, duty_cycle);
-                }
-                for (; duty_cycle >= 0; duty_cycle -= fade_step) {
-                    if (!main_loop_active) return;
-                    led_pwm_control(led_pin, PWM_FREQ, duty_cycle);
-                }
-            }
-            duty_cycle = 0;
-
-            color_sequence++;
-            if (*color_sequence == '\0') {
-                color_sequence -= color_sequence_length;
-            }
+        // Set the duty cycle based on the LED state (on or off)
+        if (led_state) {
+            pwm_duty_cycle_values.channel_0 = pwm_duty_cycle_values.channel_0; // Brightness level
+        } else {
+            pwm_duty_cycle_values.channel_0 = 0; // LED off
         }
+
+        // Update the PWM sequence with the new duty cycle values
+        pwm_sequnce.values.p_individual = &pwm_duty_cycle_values;
+        pwm_sequnce.length = NRF_PWM_VALUES_LENGTH(pwm_duty_cycle_values);
+        pwm_sequnce.repeats = 0;
+        pwm_sequnce.end_delay = 0;
+
+        // Play the PWM sequence with looping to create blinking effect
+        nrfx_pwm_simple_playback(&pwm_instance, &pwm_sequnce, 1, NRFX_PWM_FLAG_LOOP);
     }
 }
+
+// void led_pwm_control(esl_io_pin_t pin, uint32_t freq, uint8_t duty_cycle) {
+    
+//     uint32_t period = 16000 / PWM_FREQ;
+//     uint32_t on_time = (period * duty_cycle) / 100;
+//     uint32_t off_time = period - on_time;
+//     nrfx_systick_state_t systick_context;
+
+//     // PWM ON phase
+//     led_on(pin);
+//     nrfx_systick_get(&systick_context);
+//     while (!nrfx_systick_test(&systick_context, on_time * 1000)) {
+//         if (!main_loop_active) return;
+//     }
+
+//     // PWM OFF phase
+//     led_off(pin);
+//     nrfx_systick_get(&systick_context);
+//     while (!nrfx_systick_test(&systick_context, off_time * 1000)) {
+//         if (!main_loop_active) return;
+//     }
+// }
 
 int main(void) {
     lfclk_request();
     init_timers();
     init_button_interrupt();
     cfg_pins();
-    nrfx_systick_init();
     led_off_all();
+    init_pwm();
 
     while (true) {
-        led_sequence_loop();
+        led_sequence();
         nrf_delay_ms(10);
     }
 
