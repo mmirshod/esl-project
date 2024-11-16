@@ -1,4 +1,4 @@
-#include "esl_leds.h"
+#include "esl_gpio.h"
 
 // Configure pins for LEDs and switch
 void cfg_pins() {
@@ -25,4 +25,8 @@ void led_on(esl_io_pin_t pin) {
 // Turn off a specified LED
 void led_off(esl_io_pin_t pin) {
     nrf_gpio_pin_write(pin, 1);
+}
+
+bool is_pressed() {
+    return !nrf_gpio_pin_read(SW1);
 }

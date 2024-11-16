@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-void hsv_to_rgb(uint32_t hue, uint32_t saturation, uint32_t value, uint32_t *r, uint32_t *g, uint32_t *b );
+void hsv_to_rgb(uint16_t hue, uint8_t saturation, uint8_t value, uint8_t *r, uint8_t *g, uint8_t *b );
 
 
 #endif

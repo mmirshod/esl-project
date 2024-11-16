@@ -39,8 +39,9 @@ SRC_FILES += \
   $(SDK_ROOT)/components/libraries/atomic_fifo/nrf_atfifo.c \
   $(SDK_ROOT)/components/libraries/timer/drv_rtc.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_clock.c \
-  $(SDK_ROOT)/integration/nrfx/legacy/nrf_drv_clock.c
-
+  $(SDK_ROOT)/integration/nrfx/legacy/nrf_drv_clock.c \
+  $(PROJ_DIR)/esl_utils.c \
+  $(PROJ_DIR)/esl_gpio.c 
 
 
 # Include folders common to all targets

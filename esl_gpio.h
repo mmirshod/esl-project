@@ -1,5 +1,5 @@
-#ifndef ESL_LEDS_H
-#define ESL_LEDS_H
+#ifndef ESL_GPIO_H
+#define ESL_GPIO_H
 
 #include "nrf_gpio.h"
 #include <stdint.h>
@@ -20,5 +20,6 @@ void cfg_pins(void);                // Configure pins
 void led_off_all(void);             // Turn off all LEDs
 void led_on(esl_io_pin_t pin);      // Turn on a specified LED
 void led_off(esl_io_pin_t pin);     // Turn off a specified LED
+bool is_pressed(void);              // Is the SW1 pressed or not
 
-#endif // LEDS_H
+#endif // ESL_GPIO_H
