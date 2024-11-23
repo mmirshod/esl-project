@@ -14,12 +14,11 @@
 #include <string.h>
 
 #define DEV_ID                      "4163"
-#define PWM_FREQ                    1000
 #define PWM_TOP_VAL                 255
 #define HSV_STEP                    1
 
 #define DEBOUNCE_DELAY_MS           50
-#define DOUBLE_CLICK_DELAY_MS       500
+#define DOUBLE_CLICK_DELAY_MS       300
 #define DEBOUNCE_DELAY              APP_TIMER_TICKS(DEBOUNCE_DELAY_MS)
 #define DOUBLE_CLICK_DELAY          APP_TIMER_TICKS(DOUBLE_CLICK_DELAY_MS)
 
@@ -59,6 +58,7 @@ typedef enum {
 } esl_pwm_blink_mode_t;
 
 static volatile esl_pwm_in_mode_t current_input_mode = ESL_PWM_IN_NO_INPUT;
+static volatile esl_pwm_blink_mode_t current_blink_mode = ESL_PWM_CONST_OFF;
 
 APP_TIMER_DEF(debounce_timer_id);
 APP_TIMER_DEF(double_click_timer_id);
@@ -151,7 +151,7 @@ void update_hsv() {
             }
         }
         break;
-        
+
     case ESL_PWM_IN_SATURATION:
         if (saturation_direction) {
             saturation += HSV_STEP;
@@ -186,7 +186,7 @@ void update_hsv() {
     }
 }
 
-static void esl_pwm_update_led1(esl_pwm_blink_mode_t current_blink_mode) {
+static void esl_pwm_update_led1() {
     static bool led1_direction = true;
     static int led1_duty_cycle = 0;
     int step = current_blink_mode == ESL_PWM_BLINK_SLOW ? 5 : 20;
@@ -194,14 +194,14 @@ static void esl_pwm_update_led1(esl_pwm_blink_mode_t current_blink_mode) {
     if (current_blink_mode == ESL_PWM_CONST_OFF) {
         esl_pwm_update_duty_cycle(LED1, 0);
     } else if (current_blink_mode == ESL_PWM_CONST_ON) {
-        esl_pwm_update_duty_cycle(LED1, PWM_TOP_VAL);
+        esl_pwm_update_duty_cycle(LED1, PWM_TOP_VAL * 0.9);
     } else if (current_blink_mode == ESL_PWM_BLINK_SLOW || current_blink_mode == ESL_PWM_BLINK_FAST) {
         if (led1_direction) led1_duty_cycle += step;
         else led1_duty_cycle -= step;
 
-        if (led1_duty_cycle >= PWM_TOP_VAL) {
+        if (led1_duty_cycle >= PWM_TOP_VAL * 0.9) {
             led1_direction = !led1_direction;
-            led1_duty_cycle = PWM_TOP_VAL;
+            led1_duty_cycle = PWM_TOP_VAL * 0.9;
         } else if (led1_duty_cycle <= 0) {
             led1_direction = !led1_direction;
             led1_duty_cycle = 0;
@@ -239,6 +239,9 @@ void debounce_timeout_handler(void *p_context) {
         awaiting_second_click = false;
         if (current_input_mode++ == ESL_PWM_IN_BRIGHTNESS)
             current_input_mode = ESL_PWM_IN_NO_INPUT;
+        if (current_blink_mode++ == ESL_PWM_CONST_ON) {
+            current_blink_mode = ESL_PWM_CONST_OFF;
+        }
 
         app_timer_stop(double_click_timer_id);
     }
@@ -252,9 +255,8 @@ void double_click_timeout_handler(void *p_context) {
 void led_sequence() {
     switch (current_input_mode) {
         case ESL_PWM_IN_NO_INPUT:
-            esl_pwm_update_led1(ESL_PWM_CONST_OFF);
+            esl_pwm_update_led1(0);
             esl_pwm_play_seq();
-            // nrf_delay_ms(10);
         case ESL_PWM_IN_HUE:
             esl_pwm_update_led1(ESL_PWM_BLINK_SLOW);
             if (is_pressed()) {
@@ -292,7 +294,8 @@ int main(void) {
 
     while (1) {
         led_sequence();
-        // nrf_delay_us(100);
+
+
     }
     return 0;
 }
