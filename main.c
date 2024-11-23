@@ -44,12 +44,11 @@ static nrf_pwm_sequence_t const pwm_sequnce = {
     .end_delay           = 0
 };
 
-
 typedef enum {
-    NO_INPUT    =   0,
-    HUE         =   1,
-    SATURATION  =   2,
-    BRIGHTNESS  =   3,
+    ESL_PWM_IN_NO_INPUT    =   0,
+    ESL_PWM_IN_HUE         =   1,
+    ESL_PWM_IN_SATURATION  =   2,
+    ESL_PWM_IN_BRIGHTNESS  =   3,
 } esl_pwm_in_mode_t;
 
 typedef enum {
@@ -59,8 +58,7 @@ typedef enum {
     ESL_PWM_CONST_ON    = 3,
 } esl_pwm_blink_mode_t;
 
-static volatile esl_pwm_in_mode_t current_input_mode = NO_INPUT;
-// static volatile esl_pwm_blink_mode_t current_blink_mode = ESL_PWM_CONST_OFF;
+static volatile esl_pwm_in_mode_t current_input_mode = ESL_PWM_IN_NO_INPUT;
 
 APP_TIMER_DEF(debounce_timer_id);
 APP_TIMER_DEF(double_click_timer_id);
@@ -112,23 +110,11 @@ static void init_pwm() {
     nrfx_pwm_init(&pwm_instance, &pwm_config, NULL);
 }
 
-static void esl_pwm_update_duty_cycle(esl_io_pin_t out_pin, uint8_t val, esl_pwm_blink_mode_t blink_mode) {
+static void esl_pwm_update_duty_cycle(esl_io_pin_t out_pin, uint8_t val) {
     switch (out_pin)
     {
     case LED1:
-        if (blink_mode == ESL_PWM_BLINK_SLOW) {
-            // pwm_seq_values[0].channel_0 = PWM_TOP_VAL / blink_mode;
-            // pwm_seq_values[1].channel_0 = 0;
-            // pwm_seq_values[2].channel_0 = PWM_TOP_VAL / blink_mode;
-            // pwm_seq_values[3].channel_0 = 0;
-            pwm_seq_values.channel_0 = 0.10  * PWM_TOP_VAL; 
-        } else if (blink_mode == ESL_PWM_BLINK_FAST) {
-            pwm_seq_values.channel_0 = 0.50  * PWM_TOP_VAL; 
-        } else if (blink_mode == ESL_PWM_CONST_OFF) {
-            pwm_seq_values.channel_0 = 0; 
-        } else if (blink_mode == ESL_PWM_CONST_ON) {
-            pwm_seq_values.channel_0 = PWM_TOP_VAL; 
-        }
+        pwm_seq_values.channel_0 = val > PWM_TOP_VAL ? PWM_TOP_VAL : val;
         break;
     case LED_R:
         pwm_seq_values.channel_1 = val > PWM_TOP_VAL ? PWM_TOP_VAL : val;
@@ -144,11 +130,92 @@ static void esl_pwm_update_duty_cycle(esl_io_pin_t out_pin, uint8_t val, esl_pwm
     }
 }
 
-static void esl_pwm_update_all_duty_cycles(uint8_t val_r, uint8_t val_g, uint8_t val_b, esl_pwm_blink_mode_t blink_mode) {
-    esl_pwm_update_duty_cycle(LED1, 0, blink_mode);
-    esl_pwm_update_duty_cycle(LED_R, val_r, ESL_PWM_CONST_OFF);
-    esl_pwm_update_duty_cycle(LED_G, val_g, ESL_PWM_CONST_OFF);
-    esl_pwm_update_duty_cycle(LED_B, val_b, ESL_PWM_CONST_OFF);
+void update_hsv() {
+    static bool hue_direction = true;
+    static bool saturation_direction = true;
+    static bool brightness_direction = true;
+    switch (current_input_mode)
+    {
+    case ESL_PWM_IN_HUE:
+        if (hue_direction) {
+            hue += HSV_STEP;
+            if (hue >= 360) {
+                hue = 360;
+                hue_direction = !hue_direction; // Reverse direction
+            }
+        } else {
+            hue -= HSV_STEP;
+            if (hue <= 0) {
+                hue = 0;
+                hue_direction = !hue_direction; // Reverse direction
+            }
+        }
+        break;
+        
+    case ESL_PWM_IN_SATURATION:
+        if (saturation_direction) {
+            saturation += HSV_STEP;
+            if (saturation >= 100) {
+                saturation = 100;
+                saturation_direction = !saturation_direction; // Reverse direction
+            }
+        } else {
+;
+            saturation -= HSV_STEP;
+            if (saturation <= 0) {
+                saturation = 0;
+                saturation_direction = !saturation_direction; // Reverse direction
+            }
+        }
+    case ESL_PWM_IN_BRIGHTNESS:
+        if (brightness_direction) {
+            brightness += HSV_STEP;
+            if (brightness >= 100) {
+                brightness = 100;
+                brightness_direction = !brightness_direction; // Reverse direction
+            }
+        } else {
+            brightness -= HSV_STEP;
+            if (brightness <= 0) {
+                brightness = 0;
+                brightness_direction = !brightness_direction; // Reverse direction
+            }
+        }
+    default:
+        break;
+    }
+}
+
+static void esl_pwm_update_led1(esl_pwm_blink_mode_t current_blink_mode) {
+    static bool led1_direction = true;
+    static int led1_duty_cycle = 0;
+    int step = current_blink_mode == ESL_PWM_BLINK_SLOW ? 5 : 20;
+    
+    if (current_blink_mode == ESL_PWM_CONST_OFF) {
+        esl_pwm_update_duty_cycle(LED1, 0);
+    } else if (current_blink_mode == ESL_PWM_CONST_ON) {
+        esl_pwm_update_duty_cycle(LED1, PWM_TOP_VAL);
+    } else if (current_blink_mode == ESL_PWM_BLINK_SLOW || current_blink_mode == ESL_PWM_BLINK_FAST) {
+        if (led1_direction) led1_duty_cycle += step;
+        else led1_duty_cycle -= step;
+
+        if (led1_duty_cycle >= PWM_TOP_VAL) {
+            led1_direction = !led1_direction;
+            led1_duty_cycle = PWM_TOP_VAL;
+        } else if (led1_duty_cycle <= 0) {
+            led1_direction = !led1_direction;
+            led1_duty_cycle = 0;
+        }
+        esl_pwm_update_duty_cycle(LED1, led1_duty_cycle);
+    }
+}
+
+static void esl_pwm_update_rgb() {
+    update_hsv();
+    hsv_to_rgb(hue, saturation, brightness, &r_val, &g_val, &b_val);
+    esl_pwm_update_duty_cycle(LED_R, r_val);
+    esl_pwm_update_duty_cycle(LED_G, g_val);
+    esl_pwm_update_duty_cycle(LED_B, b_val);
 }
 
 static void esl_pwm_play_seq() {
@@ -170,14 +237,10 @@ void debounce_timeout_handler(void *p_context) {
     } else {
         // Second click detected within the delay
         awaiting_second_click = false;
-        if (current_input_mode++ == BRIGHTNESS) {
-            current_input_mode = NO_INPUT;
-        }
-        // if (current_blink_mode++ == ESL_PWM_CONST_ON) {
-        //     current_blink_mode = ESL_PWM_CONST_OFF;
-        // }
-        
-        app_timer_stop(double_click_timer_id);  // Stop double-click timer
+        if (current_input_mode++ == ESL_PWM_IN_BRIGHTNESS)
+            current_input_mode = ESL_PWM_IN_NO_INPUT;
+
+        app_timer_stop(double_click_timer_id);
     }
 }
 
@@ -186,99 +249,35 @@ void double_click_timeout_handler(void *p_context) {
     awaiting_second_click = false;
 }
 
-void update_hsv() {
-    static bool hue_direction = true;
-    static bool saturation_direction = true;
-    static bool brightness_direction = true;
-    switch (current_input_mode)
-    {
-    case HUE:
-        if (hue_direction) {
-            hue += HSV_STEP;
-            if (hue >= 360) {
-                hue = 360;
-                hue_direction = !hue_direction; // Reverse direction
-            }
-        } else {
-            hue -= HSV_STEP;
-            if (hue <= 0) {
-                hue = 0;
-                hue_direction = !hue_direction; // Reverse direction
-            }
-        }
-        break;
-    case SATURATION:
-        if (saturation_direction) {
-            saturation += HSV_STEP;
-            if (saturation >= 100) {
-                saturation = 100;
-                saturation_direction = !saturation_direction; // Reverse direction
-            }
-        } else {
-;
-            saturation -= HSV_STEP;
-            if (saturation <= 0) {
-                saturation = 0;
-                saturation_direction = !saturation_direction; // Reverse direction
-            }
-        }
-    case BRIGHTNESS:
-        if (brightness_direction) {
-            brightness += HSV_STEP;
-            if (brightness >= 100) {
-                brightness = 100;
-                brightness_direction = !brightness_direction; // Reverse direction
-            }
-        } else {
-            brightness -= HSV_STEP;
-            if (brightness <= 0) {
-                brightness = 0;
-                brightness_direction = !brightness_direction; // Reverse direction
-            }
-        }
-    default:
-        break;
-    }
-}
-
 void led_sequence() {
-    // esl_pwm_update_all_duty_cycles(r_val, g_val, b_val, current_blink_mode);
-    // esl_pwm_play_seq();
-    // nrf_delay_ms(100);
-
-
     switch (current_input_mode) {
-        default:
-        case NO_INPUT:
-            hsv_to_rgb(hue, saturation, brightness, &r_val, &g_val, &b_val);
-            esl_pwm_update_all_duty_cycles(r_val, g_val, b_val, ESL_PWM_CONST_OFF);  // LED1 off, other leds in the stable state in No Input mode
+        case ESL_PWM_IN_NO_INPUT:
+            esl_pwm_update_led1(ESL_PWM_CONST_OFF);
             esl_pwm_play_seq();
-        case HUE:
+            // nrf_delay_ms(10);
+        case ESL_PWM_IN_HUE:
+            esl_pwm_update_led1(ESL_PWM_BLINK_SLOW);
             if (is_pressed()) {
-                update_hsv();
-                hsv_to_rgb(hue, saturation, brightness, &r_val, &g_val, &b_val);
-                esl_pwm_update_all_duty_cycles(r_val, g_val, b_val, ESL_PWM_BLINK_SLOW);  // LED1 blinks slowly, HUE adjustment
-                esl_pwm_play_seq();
-                nrf_delay_ms(100);
+                esl_pwm_update_rgb();
             }
+            esl_pwm_play_seq();
+            nrf_delay_ms(10);
             break;
-        case SATURATION:
+        case ESL_PWM_IN_SATURATION:
+            esl_pwm_update_led1(ESL_PWM_BLINK_FAST);
             if (is_pressed()) {
-                update_hsv();
-                hsv_to_rgb(hue, saturation, brightness, &r_val, &g_val, &b_val);
-                esl_pwm_update_all_duty_cycles(r_val, g_val, b_val, ESL_PWM_BLINK_FAST);  // LED1 blinks fast, SATURATION adjustment
-                esl_pwm_play_seq();
-                nrf_delay_ms(100);
+                esl_pwm_update_rgb();
             }
+            esl_pwm_play_seq();
+            nrf_delay_ms(10);
             break;
-        case BRIGHTNESS:
+        case ESL_PWM_IN_BRIGHTNESS:
+            esl_pwm_update_led1(ESL_PWM_CONST_ON);
             if (is_pressed()) {
-                update_hsv();
-                hsv_to_rgb(hue, saturation, brightness, &r_val, &g_val, &b_val);
-                esl_pwm_update_all_duty_cycles(r_val, g_val, b_val, ESL_PWM_CONST_ON);  // LED1 ON, HUE adjustment
-                esl_pwm_play_seq();
-                nrf_delay_ms(100);
+                esl_pwm_update_rgb();
             }
+            esl_pwm_play_seq();
+            nrf_delay_ms(10);
             break;
     }
 }
@@ -291,8 +290,9 @@ int main(void) {
     led_off_all();
     init_pwm();
 
-    while (true) {
+    while (1) {
         led_sequence();
+        // nrf_delay_us(100);
     }
     return 0;
 }
