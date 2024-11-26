@@ -9,6 +9,13 @@
 #include "nrfx_clock.h"
 #include "nrf_drv_clock.h"
 
+#include "nrf_log.h"
+#include "nrf_log_ctrl.h"
+#include "nrf_log_default_backends.h"
+#include "nrf_log_backend_usb.h"
+#include "app_usbd.h"
+#include "app_usbd_serial_num.h"
+
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
@@ -222,6 +229,39 @@ static void esl_pwm_play_seq() {
     (void)nrfx_pwm_simple_playback(&pwm_instance, &pwm_sequnce, 1, NRFX_PWM_FLAG_LOOP); 
 }
 
+
+void led_sequence() {
+    switch (current_input_mode) {
+        case ESL_PWM_IN_NO_INPUT:
+            esl_pwm_update_led1();
+            esl_pwm_play_seq();
+        case ESL_PWM_IN_HUE:
+            esl_pwm_update_led1();
+            if (is_pressed()) {
+                esl_pwm_update_rgb();
+            }
+            esl_pwm_play_seq();
+            nrf_delay_ms(10);
+            break;
+        case ESL_PWM_IN_SATURATION:
+            esl_pwm_update_led1();
+            if (is_pressed()) {
+                esl_pwm_update_rgb();
+            }
+            esl_pwm_play_seq();
+            nrf_delay_ms(10);
+            break;
+        case ESL_PWM_IN_BRIGHTNESS:
+            esl_pwm_update_led1();
+            if (is_pressed()) {
+                esl_pwm_update_rgb();
+            }
+            esl_pwm_play_seq();
+            nrf_delay_ms(10);
+            break;
+    }
+}
+
 static void lfclk_request(void)
 {
     ret_code_t err_code = nrf_drv_clock_init();
@@ -242,6 +282,7 @@ void debounce_timeout_handler(void *p_context) {
         if (current_blink_mode++ == ESL_PWM_CONST_ON) {
             current_blink_mode = ESL_PWM_CONST_OFF;
         }
+        NRF_LOG_INFO("INPUT MODE CHANGED");
 
         app_timer_stop(double_click_timer_id);
     }
@@ -252,39 +293,11 @@ void double_click_timeout_handler(void *p_context) {
     awaiting_second_click = false;
 }
 
-void led_sequence() {
-    switch (current_input_mode) {
-        case ESL_PWM_IN_NO_INPUT:
-            esl_pwm_update_led1(0);
-            esl_pwm_play_seq();
-        case ESL_PWM_IN_HUE:
-            esl_pwm_update_led1(ESL_PWM_BLINK_SLOW);
-            if (is_pressed()) {
-                esl_pwm_update_rgb();
-            }
-            esl_pwm_play_seq();
-            nrf_delay_ms(10);
-            break;
-        case ESL_PWM_IN_SATURATION:
-            esl_pwm_update_led1(ESL_PWM_BLINK_FAST);
-            if (is_pressed()) {
-                esl_pwm_update_rgb();
-            }
-            esl_pwm_play_seq();
-            nrf_delay_ms(10);
-            break;
-        case ESL_PWM_IN_BRIGHTNESS:
-            esl_pwm_update_led1(ESL_PWM_CONST_ON);
-            if (is_pressed()) {
-                esl_pwm_update_rgb();
-            }
-            esl_pwm_play_seq();
-            nrf_delay_ms(10);
-            break;
-    }
-}
-
 int main(void) {
+    ret_code_t ret = NRF_LOG_INIT(NULL);
+    APP_ERROR_CHECK(ret);
+
+    NRF_LOG_INFO("Starting up project...");
     lfclk_request();
     init_timers();
     init_button_interrupt();
@@ -292,10 +305,18 @@ int main(void) {
     led_off_all();
     init_pwm();
 
+    NRF_LOG_DEFAULT_BACKENDS_INIT();
+
+    NRF_LOG_INFO("Entering the main loop...");
+
     while (1) {
         led_sequence();
 
+        LOG_BACKEND_USB_PROCESS();
 
+        if (!NRF_LOG_PROCESS())
+        {
+        }
     }
     return 0;
 }

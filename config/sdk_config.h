@@ -37,6 +37,9 @@
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+
+
+
 #ifndef SDK_CONFIG_H
 #define SDK_CONFIG_H
 // <<< Use Configuration Wizard in Context Menu >>>\n
@@ -152,7 +155,7 @@
 // <e> NRF_LOG_ENABLED - nrf_log - Logger
 //==========================================================
 #ifndef NRF_LOG_ENABLED
-#define NRF_LOG_ENABLED 0
+#define NRF_LOG_ENABLED 1
 #endif
 // <h> Log message pool - Configuration of log message pool
 
@@ -774,7 +777,7 @@
 // <e> NRFX_USBD_CONFIG_LOG_ENABLED - Enable logging in the module
 //==========================================================
 #ifndef NRFX_USBD_CONFIG_LOG_ENABLED
-#define NRFX_USBD_CONFIG_LOG_ENABLED 0
+#define NRFX_USBD_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRFX_USBD_CONFIG_LOG_LEVEL  - Default Severity level
  
@@ -1788,7 +1791,7 @@
 // <e> APP_USBD_CONFIG_LOG_ENABLED - Enable logging in the module.
 //==========================================================
 #ifndef APP_USBD_CONFIG_LOG_ENABLED
-#define APP_USBD_CONFIG_LOG_ENABLED 0
+#define APP_USBD_CONFIG_LOG_ENABLED 1
 #endif
 // <o> APP_USBD_CONFIG_LOG_LEVEL  - Default Severity level
  
@@ -3109,19 +3112,118 @@
 // </h> 
 //==========================================================
 
-// <q> NRF_SORTLIST_ENABLED  - nrf_sortlist - Sorted list
+#ifndef APP_TIMER_ENABLED
+#define APP_TIMER_ENABLED 1
+#endif
+
+// <o> APP_TIMER_CONFIG_OP_QUEUE_SIZE - Capacity of timer requests queue. 
+// <i> Size of the queue depends on how many timers are used
+// <i> in the system, how often timers are started and overall
+// <i> system latency. If queue size is too small app_timer calls
+// <i> will fail.
+
+#ifndef APP_TIMER_CONFIG_OP_QUEUE_SIZE
+#define APP_TIMER_CONFIG_OP_QUEUE_SIZE 10
+#endif
+
+// <o> APP_TIMER_SAFE_WINDOW_MS - Maximum possible latency (in milliseconds) of handling app_timer event. 
+// <i> Maximum possible timeout that can be set is reduced by safe window.
+// <i> Example: RTC frequency 16384 Hz, maximum possible timeout 1024 seconds - APP_TIMER_SAFE_WINDOW_MS.
+// <i> Since RTC is not stopped when processor is halted in debugging session, this value
+// <i> must cover it if debugging is needed. It is possible to halt processor for APP_TIMER_SAFE_WINDOW_MS
+// <i> without corrupting app_timer behavior.
+
+#ifndef APP_TIMER_SAFE_WINDOW_MS
+#define APP_TIMER_SAFE_WINDOW_MS 300000
+#endif
+
+// <o> APP_TIMER_CONFIG_RTC_FREQUENCY  - Configure RTC prescaler.
+ 
+// <0=> 32768 Hz 
+// <1=> 16384 Hz 
+// <3=> 8192 Hz 
+// <7=> 4096 Hz 
+// <15=> 2048 Hz 
+// <31=> 1024 Hz 
+
+#ifndef APP_TIMER_CONFIG_RTC_FREQUENCY
+#define APP_TIMER_CONFIG_RTC_FREQUENCY 0
+#endif
+
+// <q> APP_TIMER_KEEPS_RTC_ACTIVE  - Enable RTC always on
+ 
+
+// <i> If option is enabled RTC is kept running even if there is no active timers.
+// <i> This option can be used when app_timer is used for timestamping.
+
+#ifndef APP_TIMER_KEEPS_RTC_ACTIVE
+#define APP_TIMER_KEEPS_RTC_ACTIVE 0
+#endif
+
+// <o> APP_TIMER_CONFIG_IRQ_PRIORITY  - Interrupt priority
+ 
+
+// <i> Priorities 0,2 (nRF51) and 0,1,4,5 (nRF52) are reserved for SoftDevice
+// <0=> 0 (highest) 
+// <1=> 1 
+// <2=> 2 
+// <3=> 3 
+// <4=> 4 
+// <5=> 5 
+// <6=> 6 
+// <7=> 7 
+
+#ifndef APP_TIMER_CONFIG_IRQ_PRIORITY
+#define APP_TIMER_CONFIG_IRQ_PRIORITY 6
+#endif
+
+
+#ifndef APP_TIMER_WITH_PROFILER
+#define APP_TIMER_WITH_PROFILER 0
+#endif
+
+
+#ifndef APP_TIMER_CONFIG_SWI_NUMBER
+#define APP_TIMER_CONFIG_SWI_NUMBER 0
+#endif
+
+#ifndef NRF_CLOCK_ENABLED
+#define NRF_CLOCK_ENABLED 1
+#endif
+
+#ifndef CLOCK_CONFIG_LF_SRC
+#define CLOCK_CONFIG_LF_SRC 1
+#endif
+
+#ifndef CLOCK_CONFIG_IRQ_PRIORITY
+#define CLOCK_CONFIG_IRQ_PRIORITY 6
+#endif
+
+
+#ifndef NRFX_CLOCK_ENABLED
+#define NRFX_CLOCK_ENABLED 1
+#endif
+
+
+#ifndef NRFX_CLOCK_CONFIG_IRQ_PRIORITY
+#define NRFX_CLOCK_CONFIG_IRQ_PRIORITY 6
+#endif
+
+// </e>
+
+// </e>
+
+// <q> NRFX_SYSTICK_ENABLED  - nrfx_systick - ARM(R) SysTick driver
+
+
+#ifndef NRFX_SYSTICK_ENABLED
+#define NRFX_SYSTICK_ENABLED 1
+#endif
+
 
 #ifndef NRF_SORTLIST_ENABLED
 #define NRF_SORTLIST_ENABLED 1
 #endif
-
-// #ifndef NRFX_SYSTICK_ENABLED
-//     #define NRFX_SYSTICK_ENABLED 1
-// #endif
-
-// #ifndef SYSTICK_ENABLED
-// #define SYSTICK_ENABLED 1
-// #endif
 
 // <e> NRFX_GPIOTE_ENABLED - nrfx_gpiote - GPIOTE peripheral driver
 //==========================================================
@@ -3148,62 +3250,399 @@
 #define NRFX_GPIOTE_CONFIG_IRQ_PRIORITY 6
 #endif
 
-
-// <e> NRF_CLOCK_ENABLED - nrf_drv_clock - CLOCK peripheral driver - legacy layer
+// <e> NRFX_GPIOTE_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
-#ifndef NRF_CLOCK_ENABLED
-#define NRF_CLOCK_ENABLED 1
+#ifndef NRFX_GPIOTE_CONFIG_LOG_ENABLED
+#define NRFX_GPIOTE_CONFIG_LOG_ENABLED 0
 #endif
-// <o> CLOCK_CONFIG_LF_SRC  - LF Clock Source
+// <o> NRFX_GPIOTE_CONFIG_LOG_LEVEL  - Default Severity level
  
-// <0=> RC 
-// <1=> XTAL 
-// <2=> Synth 
-// <131073=> External Low Swing 
-// <196609=> External Full Swing 
+// <0=> Off 
+// <1=> Error 
+// <2=> Warning 
+// <3=> Info 
+// <4=> Debug 
 
-#ifndef CLOCK_CONFIG_LF_SRC
-#define CLOCK_CONFIG_LF_SRC 1
+#ifndef NRFX_GPIOTE_CONFIG_LOG_LEVEL
+#define NRFX_GPIOTE_CONFIG_LOG_LEVEL 3
 #endif
 
-// <o> CLOCK_CONFIG_IRQ_PRIORITY  - Interrupt priority
+// <o> NRFX_GPIOTE_CONFIG_INFO_COLOR  - ANSI escape code prefix.
+ 
+// <0=> Default 
+// <1=> Black 
+// <2=> Red 
+// <3=> Green 
+// <4=> Yellow 
+// <5=> Blue 
+// <6=> Magenta 
+// <7=> Cyan 
+// <8=> White 
+
+#ifndef NRFX_GPIOTE_CONFIG_INFO_COLOR
+#define NRFX_GPIOTE_CONFIG_INFO_COLOR 0
+#endif
+
+// <o> NRFX_GPIOTE_CONFIG_DEBUG_COLOR  - ANSI escape code prefix.
+ 
+// <0=> Default 
+// <1=> Black 
+// <2=> Red 
+// <3=> Green 
+// <4=> Yellow 
+// <5=> Blue 
+// <6=> Magenta 
+// <7=> Cyan 
+// <8=> White 
+
+#ifndef NRFX_GPIOTE_CONFIG_DEBUG_COLOR
+#define NRFX_GPIOTE_CONFIG_DEBUG_COLOR 0
+#endif
+
+
+
+// </e>
+
+// <q> APP_USBD_AUDIO_ENABLED  - app_usbd_audio - USB AUDIO class
  
 
-// <i> Priorities 0,2 (nRF51) and 0,1,4,5 (nRF52) are reserved for SoftDevice
-// <0=> 0 (highest) 
-// <1=> 1 
-// <2=> 2 
-// <3=> 3 
-// <4=> 4 
-// <5=> 5 
-// <6=> 6 
-// <7=> 7 
+#ifndef APP_USBD_AUDIO_ENABLED
+#define APP_USBD_AUDIO_ENABLED 0
+#endif
 
-#ifndef CLOCK_CONFIG_IRQ_PRIORITY
-#define CLOCK_CONFIG_IRQ_PRIORITY 6
+// <e> APP_USBD_ENABLED - app_usbd - USB Device library
+//==========================================================
+#ifndef APP_USBD_ENABLED
+#define APP_USBD_ENABLED 1
+#endif
+// <s> APP_USBD_VID - Vendor ID.
+
+// <i> Note: This value is not editable in Configuration Wizard.
+// <i> Vendor ID ordered from USB IF: http://www.usb.org/developers/vendor/
+#ifndef APP_USBD_VID
+#define APP_USBD_VID 0x1915
+#endif
+
+// <s> APP_USBD_PID - Product ID.
+
+// <i> Note: This value is not editable in Configuration Wizard.
+// <i> Selected Product ID
+#ifndef APP_USBD_PID
+#define APP_USBD_PID 0x520C
+#endif
+
+// <o> APP_USBD_DEVICE_VER_MAJOR - Major device version  <0-99> 
+
+
+// <i> Major device version, will be converted automatically to BCD notation. Use just decimal values.
+
+#ifndef APP_USBD_DEVICE_VER_MAJOR
+#define APP_USBD_DEVICE_VER_MAJOR 1
+#endif
+
+// <o> APP_USBD_DEVICE_VER_MINOR - Minor device version  <0-9> 
+
+
+// <i> Minor device version, will be converted automatically to BCD notation. Use just decimal values.
+
+#ifndef APP_USBD_DEVICE_VER_MINOR
+#define APP_USBD_DEVICE_VER_MINOR 0
+#endif
+
+// <o> APP_USBD_DEVICE_VER_SUB - Sub-minor device version  <0-9> 
+
+
+// <i> Sub-minor device version, will be converted automatically to BCD notation. Use just decimal values.
+
+#ifndef APP_USBD_DEVICE_VER_SUB
+#define APP_USBD_DEVICE_VER_SUB 0
+#endif
+
+// <q> APP_USBD_CONFIG_SELF_POWERED  - Self-powered device, as opposed to bus-powered.
+ 
+
+#ifndef APP_USBD_CONFIG_SELF_POWERED
+#define APP_USBD_CONFIG_SELF_POWERED 1
+#endif
+
+// <o> APP_USBD_CONFIG_MAX_POWER - MaxPower field in configuration descriptor in milliamps.  <0-500> 
+
+
+#ifndef APP_USBD_CONFIG_MAX_POWER
+#define APP_USBD_CONFIG_MAX_POWER 100
+#endif
+
+// <q> APP_USBD_CONFIG_POWER_EVENTS_PROCESS  - Process power events.
+ 
+
+// <i> Enable processing power events in USB event handler.
+
+#ifndef APP_USBD_CONFIG_POWER_EVENTS_PROCESS
+#define APP_USBD_CONFIG_POWER_EVENTS_PROCESS 1
+#endif
+
+// <e> APP_USBD_CONFIG_EVENT_QUEUE_ENABLE - Enable event queue.
+
+// <i> This is the default configuration when all the events are placed into internal queue.
+// <i> Disable it when an external queue is used like app_scheduler or if you wish to process all events inside interrupts.
+// <i> Processing all events from the interrupt level adds requirement not to call any functions that modifies the USBD library state from the context higher than USB interrupt context.
+// <i> Functions that modify USBD state are functions for sleep, wakeup, start, stop, enable, and disable.
+//==========================================================
+#ifndef APP_USBD_CONFIG_EVENT_QUEUE_ENABLE
+#define APP_USBD_CONFIG_EVENT_QUEUE_ENABLE 1
+#endif
+// <o> APP_USBD_CONFIG_EVENT_QUEUE_SIZE - The size of the event queue.  <16-64> 
+
+
+// <i> The size of the queue for the events that would be processed in the main loop.
+
+#ifndef APP_USBD_CONFIG_EVENT_QUEUE_SIZE
+#define APP_USBD_CONFIG_EVENT_QUEUE_SIZE 32
+#endif
+
+// <o> APP_USBD_CONFIG_SOF_HANDLING_MODE  - Change SOF events handling mode.
+ 
+
+// <i> Normal queue   - SOF events are pushed normally into the event queue.
+// <i> Compress queue - SOF events are counted and binded with other events or executed when the queue is empty.
+// <i>                  This prevents the queue from filling up with SOF events.
+// <i> Interrupt      - SOF events are processed in interrupt.
+// <0=> Normal queue 
+// <1=> Compress queue 
+// <2=> Interrupt 
+
+#ifndef APP_USBD_CONFIG_SOF_HANDLING_MODE
+#define APP_USBD_CONFIG_SOF_HANDLING_MODE 1
 #endif
 
 // </e>
 
-// <e> APP_TIMER_ENABLED - app_timer - Application timer functionality
-//==========================================================
-#ifndef APP_TIMER_ENABLED
-#define APP_TIMER_ENABLED 1
-#endif
-// <o> APP_TIMER_CONFIG_RTC_FREQUENCY  - Configure RTC prescaler.
+// <q> APP_USBD_CONFIG_SOF_TIMESTAMP_PROVIDE  - Provide a function that generates timestamps for logs based on the current SOF.
  
-// <0=> 32768 Hz 
-// <1=> 16384 Hz 
-// <3=> 8192 Hz 
-// <7=> 4096 Hz 
-// <15=> 2048 Hz 
-// <31=> 1024 Hz 
 
-#ifndef APP_TIMER_CONFIG_RTC_FREQUENCY
-#define APP_TIMER_CONFIG_RTC_FREQUENCY 0
+// <i> The function app_usbd_sof_timestamp_get is implemented if the logger is enabled. 
+// <i> Use it when initializing the logger. 
+// <i> SOF processing is always enabled when this configuration parameter is active. 
+// <i> Note: This option is configured outside of APP_USBD_CONFIG_LOG_ENABLED. 
+// <i> This means that it works even if the logging in this very module is disabled. 
+
+#ifndef APP_USBD_CONFIG_SOF_TIMESTAMP_PROVIDE
+#define APP_USBD_CONFIG_SOF_TIMESTAMP_PROVIDE 0
 #endif
 
-// <o> APP_TIMER_CONFIG_IRQ_PRIORITY  - Interrupt priority
+// <o> APP_USBD_CONFIG_DESC_STRING_SIZE - Maximum size of the NULL-terminated string of the string descriptor.  <31-254> 
+
+
+// <i> 31 characters can be stored in the internal USB buffer used for transfers.
+// <i> Any value higher than 31 creates an additional buffer just for descriptor strings.
+
+#ifndef APP_USBD_CONFIG_DESC_STRING_SIZE
+#define APP_USBD_CONFIG_DESC_STRING_SIZE 31
+#endif
+
+// <q> APP_USBD_CONFIG_DESC_STRING_UTF_ENABLED  - Enable UTF8 conversion.
+ 
+
+// <i> Enable UTF8-encoded characters. In normal processing, only ASCII characters are available.
+
+#ifndef APP_USBD_CONFIG_DESC_STRING_UTF_ENABLED
+#define APP_USBD_CONFIG_DESC_STRING_UTF_ENABLED 0
+#endif
+
+// <s> APP_USBD_STRINGS_LANGIDS - Supported languages identifiers.
+
+// <i> Note: This value is not editable in Configuration Wizard.
+// <i> Comma-separated list of supported languages.
+#ifndef APP_USBD_STRINGS_LANGIDS
+#define APP_USBD_STRINGS_LANGIDS APP_USBD_LANG_AND_SUBLANG(APP_USBD_LANG_ENGLISH, APP_USBD_SUBLANG_ENGLISH_US)
+#endif
+
+// <e> APP_USBD_STRING_ID_MANUFACTURER - Define manufacturer string ID.
+
+// <i> Setting ID to 0 disables the string.
+//==========================================================
+#ifndef APP_USBD_STRING_ID_MANUFACTURER
+#define APP_USBD_STRING_ID_MANUFACTURER 1
+#endif
+// <q> APP_USBD_STRINGS_MANUFACTURER_EXTERN  - Define whether @ref APP_USBD_STRINGS_MANUFACTURER is created by macro or declared as a global variable.
+ 
+
+#ifndef APP_USBD_STRINGS_MANUFACTURER_EXTERN
+#define APP_USBD_STRINGS_MANUFACTURER_EXTERN 0
+#endif
+
+// <s> APP_USBD_STRINGS_MANUFACTURER - String descriptor for the manufacturer name.
+
+// <i> Note: This value is not editable in Configuration Wizard.
+// <i> Comma-separated list of manufacturer names for each defined language.
+// <i> Use @ref APP_USBD_STRING_DESC macro to create string descriptor from a NULL-terminated string.
+// <i> Use @ref APP_USBD_STRING_RAW8_DESC macro to create string descriptor from comma-separated uint8_t values.
+// <i> Use @ref APP_USBD_STRING_RAW16_DESC macro to create string descriptor from comma-separated uint16_t values.
+// <i> Alternatively, configure the macro to point to any internal variable pointer that already contains the descriptor.
+// <i> Setting string to NULL disables that string.
+// <i> The order of manufacturer names must be the same like in @ref APP_USBD_STRINGS_LANGIDS.
+#ifndef APP_USBD_STRINGS_MANUFACTURER
+#define APP_USBD_STRINGS_MANUFACTURER APP_USBD_STRING_DESC("Nordic Semiconductor")
+#endif
+
+// </e>
+
+// <e> APP_USBD_STRING_ID_PRODUCT - Define product string ID.
+
+// <i> Setting ID to 0 disables the string.
+//==========================================================
+#ifndef APP_USBD_STRING_ID_PRODUCT
+#define APP_USBD_STRING_ID_PRODUCT 2
+#endif
+// <q> APP_USBD_STRINGS_PRODUCT_EXTERN  - Define whether @ref APP_USBD_STRINGS_PRODUCT is created by macro or declared as a global variable.
+ 
+
+#ifndef APP_USBD_STRINGS_PRODUCT_EXTERN
+#define APP_USBD_STRINGS_PRODUCT_EXTERN 0
+#endif
+
+// <s> APP_USBD_STRINGS_PRODUCT - String descriptor for the product name.
+
+// <i> Note: This value is not editable in Configuration Wizard.
+// <i> List of product names that is defined the same way like in @ref APP_USBD_STRINGS_MANUFACTURER.
+#ifndef APP_USBD_STRINGS_PRODUCT
+#define APP_USBD_STRINGS_PRODUCT APP_USBD_STRING_DESC("nRF52 USB Product")
+#endif
+
+// </e>
+
+// <e> APP_USBD_STRING_ID_SERIAL - Define serial number string ID.
+
+// <i> Setting ID to 0 disables the string.
+//==========================================================
+#ifndef APP_USBD_STRING_ID_SERIAL
+#define APP_USBD_STRING_ID_SERIAL 3
+#endif
+// <q> APP_USBD_STRING_SERIAL_EXTERN  - Define whether @ref APP_USBD_STRING_SERIAL is created by macro or declared as a global variable.
+ 
+
+#ifndef APP_USBD_STRING_SERIAL_EXTERN
+#define APP_USBD_STRING_SERIAL_EXTERN 0
+#endif
+
+// <s> APP_USBD_STRING_SERIAL - String descriptor for the serial number.
+
+// <i> Note: This value is not editable in Configuration Wizard.
+// <i> Serial number that is defined the same way like in @ref APP_USBD_STRINGS_MANUFACTURER.
+#ifndef APP_USBD_STRING_SERIAL
+#define APP_USBD_STRING_SERIAL APP_USBD_STRING_DESC("000000000000")
+#endif
+
+// </e>
+
+// <e> APP_USBD_STRING_ID_CONFIGURATION - Define configuration string ID.
+
+// <i> Setting ID to 0 disables the string.
+//==========================================================
+#ifndef APP_USBD_STRING_ID_CONFIGURATION
+#define APP_USBD_STRING_ID_CONFIGURATION 4
+#endif
+// <q> APP_USBD_STRING_CONFIGURATION_EXTERN  - Define whether @ref APP_USBD_STRINGS_CONFIGURATION is created by macro or declared as global variable.
+ 
+
+#ifndef APP_USBD_STRING_CONFIGURATION_EXTERN
+#define APP_USBD_STRING_CONFIGURATION_EXTERN 0
+#endif
+
+// <s> APP_USBD_STRINGS_CONFIGURATION - String descriptor for the device configuration.
+
+// <i> Note: This value is not editable in Configuration Wizard.
+// <i> Configuration string that is defined the same way like in @ref APP_USBD_STRINGS_MANUFACTURER.
+#ifndef APP_USBD_STRINGS_CONFIGURATION
+#define APP_USBD_STRINGS_CONFIGURATION APP_USBD_STRING_DESC("Default configuration")
+#endif
+
+// </e>
+
+// <s> APP_USBD_STRINGS_USER - Default values for user strings.
+
+// <i> Note: This value is not editable in Configuration Wizard.
+// <i> This value stores all application specific user strings with the default initialization.
+// <i> The setup is done by X-macros.
+// <i> Expected macro parameters:
+// <i> @code
+// <i> X(mnemonic, [=str_idx], ...)
+// <i> @endcode
+// <i> - @c mnemonic: Mnemonic of the string descriptor that would be added to
+// <i>                @ref app_usbd_string_desc_idx_t enumerator.
+// <i> - @c str_idx : String index value, can be set or left empty.
+// <i>                For example, WinUSB driver requires descriptor to be present on 0xEE index.
+// <i>                Then use X(USBD_STRING_WINUSB, =0xEE, (APP_USBD_STRING_DESC(...)))
+// <i> - @c ...     : List of string descriptors for each defined language.
+#ifndef APP_USBD_STRINGS_USER
+#define APP_USBD_STRINGS_USER X(APP_USER_1, , APP_USBD_STRING_DESC("User 1"))
+#endif
+
+// </e>
+
+// <e> APP_USBD_HID_ENABLED - app_usbd_hid - USB HID class
+//==========================================================
+#ifndef APP_USBD_HID_ENABLED
+#define APP_USBD_HID_ENABLED 0
+#endif
+// <o> APP_USBD_HID_DEFAULT_IDLE_RATE - Default idle rate for HID class.   <0-255> 
+
+
+// <i> 0 means indefinite duration, any other value is multiplied by 4 milliseconds. Refer to Chapter 7.2.4 of HID 1.11 Specification.
+
+#ifndef APP_USBD_HID_DEFAULT_IDLE_RATE
+#define APP_USBD_HID_DEFAULT_IDLE_RATE 0
+#endif
+
+// <o> APP_USBD_HID_REPORT_IDLE_TABLE_SIZE - Size of idle rate table.   <1-255> 
+
+
+// <i> Must be higher than the highest report ID used.
+
+#ifndef APP_USBD_HID_REPORT_IDLE_TABLE_SIZE
+#define APP_USBD_HID_REPORT_IDLE_TABLE_SIZE 4
+#endif
+
+// </e>
+
+// <q> APP_USBD_HID_GENERIC_ENABLED  - app_usbd_hid_generic - USB HID generic
+ 
+
+#ifndef APP_USBD_HID_GENERIC_ENABLED
+#define APP_USBD_HID_GENERIC_ENABLED 0
+#endif
+
+// <q> APP_USBD_HID_KBD_ENABLED  - app_usbd_hid_kbd - USB HID keyboard
+ 
+
+#ifndef APP_USBD_HID_KBD_ENABLED
+#define APP_USBD_HID_KBD_ENABLED 0
+#endif
+
+// <q> APP_USBD_HID_MOUSE_ENABLED  - app_usbd_hid_mouse - USB HID mouse
+ 
+
+#ifndef APP_USBD_HID_MOUSE_ENABLED
+#define APP_USBD_HID_MOUSE_ENABLED 0
+#endif
+
+// <q> APP_USBD_MSC_ENABLED  - app_usbd_msc - USB MSC class
+ 
+
+#ifndef APP_USBD_MSC_ENABLED
+#define APP_USBD_MSC_ENABLED 0
+#endif
+
+
+
+// </e>
+
+// <e> POWER_ENABLED - nrf_drv_power - POWER peripheral driver - legacy layer
+//==========================================================
+#ifndef POWER_ENABLED
+#define POWER_ENABLED 1
+#endif
+// <o> POWER_CONFIG_IRQ_PRIORITY  - Interrupt priority
  
 
 // <i> Priorities 0,2 (nRF51) and 0,1,4,5 (nRF52) are reserved for SoftDevice
@@ -3216,72 +3655,184 @@
 // <6=> 6 
 // <7=> 7 
 
-#ifndef APP_TIMER_CONFIG_IRQ_PRIORITY
-#define APP_TIMER_CONFIG_IRQ_PRIORITY 6
+#ifndef POWER_CONFIG_IRQ_PRIORITY
+#define POWER_CONFIG_IRQ_PRIORITY 6
 #endif
 
-// <o> APP_TIMER_CONFIG_OP_QUEUE_SIZE - Capacity of timer requests queue. 
-// <i> Size of the queue depends on how many timers are used
-// <i> in the system, how often timers are started and overall
-// <i> system latency. If queue size is too small app_timer calls
-// <i> will fail.
-
-#ifndef APP_TIMER_CONFIG_OP_QUEUE_SIZE
-#define APP_TIMER_CONFIG_OP_QUEUE_SIZE 10
-#endif
-
-// <q> APP_TIMER_CONFIG_USE_SCHEDULER  - Enable scheduling app_timer events to app_scheduler
+// <q> POWER_CONFIG_DEFAULT_DCDCEN  - The default configuration of main DCDC regulator
  
 
-#ifndef APP_TIMER_CONFIG_USE_SCHEDULER
-#define APP_TIMER_CONFIG_USE_SCHEDULER 0
+// <i> This settings means only that components for DCDC regulator are installed and it can be enabled.
+
+#ifndef POWER_CONFIG_DEFAULT_DCDCEN
+#define POWER_CONFIG_DEFAULT_DCDCEN 0
 #endif
 
-// <q> APP_TIMER_KEEPS_RTC_ACTIVE  - Enable RTC always on
+// <q> POWER_CONFIG_DEFAULT_DCDCENHV  - The default configuration of High Voltage DCDC regulator
  
 
-// <i> If option is enabled RTC is kept running even if there is no active timers.
-// <i> This option can be used when app_timer is used for timestamping.
+// <i> This settings means only that components for DCDC regulator are installed and it can be enabled.
 
-#ifndef APP_TIMER_KEEPS_RTC_ACTIVE
-#define APP_TIMER_KEEPS_RTC_ACTIVE 0
+#ifndef POWER_CONFIG_DEFAULT_DCDCENHV
+#define POWER_CONFIG_DEFAULT_DCDCENHV 0
 #endif
 
-// <o> APP_TIMER_SAFE_WINDOW_MS - Maximum possible latency (in milliseconds) of handling app_timer event. 
-// <i> Maximum possible timeout that can be set is reduced by safe window.
-// <i> Example: RTC frequency 16384 Hz, maximum possible timeout 1024 seconds - APP_TIMER_SAFE_WINDOW_MS.
-// <i> Since RTC is not stopped when processor is halted in debugging session, this value
-// <i> must cover it if debugging is needed. It is possible to halt processor for APP_TIMER_SAFE_WINDOW_MS
-// <i> without corrupting app_timer behavior.
 
-#ifndef APP_TIMER_SAFE_WINDOW_MS
-#define APP_TIMER_SAFE_WINDOW_MS 300000
+
+// <e> USBD_ENABLED - nrf_drv_usbd - Software Component
+//==========================================================
+#ifndef USBD_ENABLED
+#define USBD_ENABLED 0
+#endif
+// <o> USBD_CONFIG_IRQ_PRIORITY  - Interrupt priority
+ 
+
+// <i> Priorities 0,2 (nRF51) and 0,1,4,5 (nRF52) are reserved for SoftDevice
+// <0=> 0 (highest) 
+// <1=> 1 
+// <2=> 2 
+// <3=> 3 
+// <4=> 4 
+// <5=> 5 
+// <6=> 6 
+// <7=> 7 
+
+#ifndef USBD_CONFIG_IRQ_PRIORITY
+#define USBD_CONFIG_IRQ_PRIORITY 6
 #endif
 
-// <h> App Timer Legacy configuration - Legacy configuration.
+// <o> USBD_CONFIG_DMASCHEDULER_MODE  - USBD SMA scheduler working scheme
+ 
+// <0=> Prioritized access 
+// <1=> Round Robin 
+
+#ifndef USBD_CONFIG_DMASCHEDULER_MODE
+#define USBD_CONFIG_DMASCHEDULER_MODE 0
+#endif
+
+// <q> USBD_CONFIG_DMASCHEDULER_ISO_BOOST  - Give priority to isochronous transfers
+ 
+
+// <i> This option gives priority to isochronous transfers.
+// <i> Enabling it assures that isochronous transfers are always processed,
+// <i> even if multiple other transfers are pending.
+// <i> Isochronous endpoints are prioritized before the usbd_dma_scheduler_algorithm
+// <i> function is called, so the option is independent of the algorithm chosen.
+
+#ifndef USBD_CONFIG_DMASCHEDULER_ISO_BOOST
+#define USBD_CONFIG_DMASCHEDULER_ISO_BOOST 1
+#endif
+
+// <q> USBD_CONFIG_ISO_IN_ZLP  - Respond to an IN token on ISO IN endpoint with ZLP when no data is ready
+ 
+
+// <i> If set, ISO IN endpoint will respond to an IN token with ZLP when no data is ready to be sent.
+// <i> Else, there will be no response.
+// <i> NOTE: This option does not work on Engineering A chip.
+
+#ifndef USBD_CONFIG_ISO_IN_ZLP
+#define USBD_CONFIG_ISO_IN_ZLP 0
+#endif
+
+// </e>
+
+
+// </e>
+
+// <e> NRFX_USBD_ENABLED - nrfx_usbd - USBD peripheral driver
+//==========================================================
+#ifndef NRFX_USBD_ENABLED
+#define NRFX_USBD_ENABLED 1
+#endif
+// <o> NRFX_USBD_CONFIG_IRQ_PRIORITY  - Interrupt priority
+ 
+// <0=> 0 (highest) 
+// <1=> 1 
+// <2=> 2 
+// <3=> 3 
+// <4=> 4 
+// <5=> 5 
+// <6=> 6 
+// <7=> 7 
+
+#ifndef NRFX_USBD_CONFIG_IRQ_PRIORITY
+#define NRFX_USBD_CONFIG_IRQ_PRIORITY 6
+#endif
+
+// <o> NRFX_USBD_CONFIG_DMASCHEDULER_MODE  - USBD DMA scheduler working scheme
+ 
+// <0=> Prioritized access 
+// <1=> Round Robin 
+
+#ifndef NRFX_USBD_CONFIG_DMASCHEDULER_MODE
+#define NRFX_USBD_CONFIG_DMASCHEDULER_MODE 0
+#endif
+
+// <q> NRFX_USBD_CONFIG_DMASCHEDULER_ISO_BOOST  - Give priority to isochronous transfers
+ 
+
+// <i> This option gives priority to isochronous transfers.
+// <i> Enabling it assures that isochronous transfers are always processed,
+// <i> even if multiple other transfers are pending.
+// <i> Isochronous endpoints are prioritized before the usbd_dma_scheduler_algorithm
+// <i> function is called, so the option is independent of the algorithm chosen.
+
+#ifndef NRFX_USBD_CONFIG_DMASCHEDULER_ISO_BOOST
+#define NRFX_USBD_CONFIG_DMASCHEDULER_ISO_BOOST 1
+#endif
+
+// <q> NRFX_USBD_CONFIG_ISO_IN_ZLP  - Respond to an IN token on ISO IN endpoint with ZLP when no data is ready
+ 
+
+// <i> If set, ISO IN endpoint will respond to an IN token with ZLP when no data is ready to be sent.
+// <i> Else, there will be no response.
+
+#ifndef NRFX_USBD_CONFIG_ISO_IN_ZLP
+#define NRFX_USBD_CONFIG_ISO_IN_ZLP 0
+#endif
+
+// <q> NRFX_USBD_USE_WORKAROUND_FOR_ANOMALY_211  - Use workaround for anomaly 211
+ 
+
+// <i> If set, workaround for anomaly 211 will be enabled.
+// <i> Anomaly 211 - Device remains in SUSPEND too long when host resumes
+// <i> bus activity (sending SOF packets) without a RESUME condition.
+
+#ifndef NRFX_USBD_USE_WORKAROUND_FOR_ANOMALY_211
+#define NRFX_USBD_USE_WORKAROUND_FOR_ANOMALY_211 0
+#endif
+
+// </e>
+
+// <h> app_usbd_cdc_acm - USB CDC ACM class
 
 //==========================================================
-// <q> APP_TIMER_WITH_PROFILER  - Enable app_timer profiling
+// <q> APP_USBD_CDC_ACM_ENABLED  - Enabling USBD CDC ACM Class library
  
 
-#ifndef APP_TIMER_WITH_PROFILER
-#define APP_TIMER_WITH_PROFILER 0
+#ifndef APP_USBD_CDC_ACM_ENABLED
+#define APP_USBD_CDC_ACM_ENABLED 1
 #endif
 
-// <q> APP_TIMER_CONFIG_SWI_NUMBER  - Configure SWI instance used.
+// <q> APP_USBD_CDC_ACM_ZLP_ON_EPSIZE_WRITE  - Send ZLP on write with same size as endpoint
  
 
-#ifndef APP_TIMER_CONFIG_SWI_NUMBER
-#define APP_TIMER_CONFIG_SWI_NUMBER 0
+// <i> If enabled, CDC ACM class will automatically send a zero length packet after transfer which has the same size as endpoint.
+// <i> This may limit throughput if a lot of binary data is sent, but in terminal mode operation it makes sure that the data is always displayed right after it is sent.
+
+#ifndef APP_USBD_CDC_ACM_ZLP_ON_EPSIZE_WRITE
+#define APP_USBD_CDC_ACM_ZLP_ON_EPSIZE_WRITE 1
 #endif
 
 // </h> 
 //==========================================================
 
-// </e>
 
-// <<< end of configuration section >>>
-#endif //SDK_CONFIG_H
+
+
+
+
+
 
 // <e> NRFX_PWM_ENABLED - nrfx_pwm - PWM peripheral driver
 //==========================================================
@@ -3460,3 +4011,6 @@
 // </e>
 
 // </e>
+
+// <<< end of configuration section >>>
+#endif //SDK_CONFIG_H
