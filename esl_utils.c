@@ -20,3 +20,29 @@ void hsv_to_rgb(uint16_t hue, uint8_t saturation, uint8_t value, uint8_t *r, uin
         case 5: *r = v * 255; *g = p * 255; *b = q * 255; break;
     }
 }
+
+void rgb_to_hsv(uint8_t r, uint8_t g, uint8_t b, uint16_t* hue, uint8_t* saturation, uint8_t* value) {
+    uint8_t max = (r > g) ? ((r > b) ? r : b) : ((g > b) ? g : b);
+    uint8_t min = (r < g) ? ((r < b) ? r : b) : ((g < b) ? g : b);
+    uint8_t delta = max - min;
+
+    // Calculate value (V)
+    *value = max;
+
+    // Calculate saturation (S)
+    *saturation = (max == 0) ? 0 : (delta * 255) / max;
+
+    // Calculate hue (H)
+    if (delta == 0) {
+        *hue = 0;  // Undefined hue for grayscale (r = g = b)
+    } else {
+        if (max == r) {
+            *hue = (60 * ((g - b) * 100 / delta) + 36000) / 100;  // Ensure positive hue
+        } else if (max == g) {
+            *hue = (60 * ((b - r) * 100 / delta) + 12000) / 100;
+        } else {
+            *hue = (60 * ((r - g) * 100 / delta) + 24000) / 100;
+        }
+        if (*hue >= 360) *hue -= 360;
+    }
+}

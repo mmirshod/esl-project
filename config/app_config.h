@@ -127,4 +127,40 @@
 
 // </e>
 
+#ifndef DEV_ID
+#define DEV_ID                      "4163"
+#endif
+
+#ifndef PWM_TOP_VAL
+#define PWM_TOP_VAL                 255
+#endif
+
+#ifndef HSV_STEP
+#define HSV_STEP                    1
+#endif
+
+#ifndef DEBOUNCE_DELAY_MS
+#define DEBOUNCE_DELAY_MS           50
+#endif
+
+#ifndef DOUBLE_CLICK_DELAY_MS
+#define DOUBLE_CLICK_DELAY_MS       300
+#endif
+
+#ifndef ESL_NVMC_MAX_STRING_LEN
+#define ESL_NVMC_MAX_STRING_LEN     (62u)
+#endif
+
+#ifndef ESL_NVMC_BLOCK_VALID
+#define ESL_NVMC_BLOCK_VALID          (0xA5)
+#endif
+
+#ifndef ESL_NVMC_BLOCK_INVALID
+#define ESL_NVMC_BLOCK_INVALID        (0xA55A0000)
+#endif
+
+#ifndef ESL_NVMC_BLOCK_NOT_INIT
+#define ESL_NVMC_BLOCK_NOT_INIT       (0xFFFFFFFF)
+#endif
+
 #endif
