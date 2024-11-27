@@ -348,11 +348,11 @@ void debounce_timeout_handler(void *p_context) {
         awaiting_second_click = false;
         if (current_input_mode++ == ESL_PWM_IN_BRIGHTNESS)
             current_input_mode = ESL_PWM_IN_NO_INPUT;
+            esl_nvmc_write_rgb();
         if (current_blink_mode++ == ESL_PWM_CONST_ON) {
             current_blink_mode = ESL_PWM_CONST_OFF;
         }
         NRF_LOG_INFO("INPUT MODE CHANGED: %d", current_input_mode);
-        esl_nvmc_write_rgb();
 
         app_timer_stop(double_click_timer_id);
     }
