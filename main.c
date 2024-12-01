@@ -18,18 +18,8 @@
 #include "app_usbd_serial_num.h"
 
 #include <stdint.h>
-// #include <stdint-gcc.h>
 #include <stdbool.h>
 #include <string.h>
-
-#define DEV_ID                      "4163"
-#define PWM_TOP_VAL                 255
-#define HSV_STEP                    1
-
-#define DEBOUNCE_DELAY_MS           50
-#define DOUBLE_CLICK_DELAY_MS       300
-#define DEBOUNCE_DELAY              APP_TIMER_TICKS(DEBOUNCE_DELAY_MS)
-#define DOUBLE_CLICK_DELAY          APP_TIMER_TICKS(DOUBLE_CLICK_DELAY_MS)
 
 static volatile bool awaiting_second_click = false;
 static volatile bool single_click_processed = false;

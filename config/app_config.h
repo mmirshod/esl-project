@@ -147,20 +147,8 @@
 #define DOUBLE_CLICK_DELAY_MS       300
 #endif
 
-#ifndef ESL_NVMC_MAX_STRING_LEN
-#define ESL_NVMC_MAX_STRING_LEN     (62u)
-#endif
-
 #ifndef ESL_NVMC_BLOCK_VALID
 #define ESL_NVMC_BLOCK_VALID          (0xA5)
-#endif
-
-#ifndef ESL_NVMC_BLOCK_INVALID
-#define ESL_NVMC_BLOCK_INVALID        (0xA55A0000)
-#endif
-
-#ifndef ESL_NVMC_BLOCK_NOT_INIT
-#define ESL_NVMC_BLOCK_NOT_INIT       (0xFFFFFFFF)
 #endif
 
 #endif
