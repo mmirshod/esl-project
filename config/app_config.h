@@ -148,7 +148,35 @@
 #endif
 
 #ifndef ESL_NVMC_BLOCK_VALID
-#define ESL_NVMC_BLOCK_VALID          (0xA5)
+#define ESL_NVMC_BLOCK_VALID        (0xA5)
+#endif
+
+#ifndef CDC_ACM_COMM_INTERFACE
+#define CDC_ACM_COMM_INTERFACE 2
+#endif
+
+#ifndef CDC_ACM_COMM_EPIN
+#define CDC_ACM_COMM_EPIN NRF_DRV_USBD_EPIN3
+#endif
+
+#ifndef CDC_ACM_DATA_INTERFACE
+#define CDC_ACM_DATA_INTERFACE 3
+#endif
+
+#ifndef CDC_ACM_DATA_EPIN
+#define CDC_ACM_DATA_EPIN NRF_DRV_USBD_EPIN4
+#endif
+
+#ifndef CDC_ACM_DATA_EPOUT
+#define CDC_ACM_DATA_EPOUT NRF_DRV_USBD_EPOUT4
+#endif
+
+#ifndef ESL_USB_COMM_BUFFER_SIZE
+#define ESL_USB_COMM_BUFFER_SIZE 24
+#endif
+
+#ifndef READ_SIZE
+#define READ_SIZE 1
 #endif
 
 #endif
