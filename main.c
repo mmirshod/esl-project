@@ -25,6 +25,16 @@
  * Custom data types
  */
 
+#define DEBOUNCE_DELAY              APP_TIMER_TICKS(DEBOUNCE_DELAY_MS)
+#define DOUBLE_CLICK_DELAY          APP_TIMER_TICKS(DOUBLE_CLICK_DELAY_MS)
+
+#define ANSI_COLOR_GREEN "\033[32m"
+#define ANSI_COLOR_RED   "\033[31m"
+#define ANSI_COLOR_YELLOW "\033[33m"
+#define ANSI_COLOR_WHITE "\033[37m"
+#define ANSI_COLOR_RESET "\033[0m"
+
+
 typedef union {
     struct {
         uint8_t magic_number;
@@ -48,6 +58,13 @@ typedef enum {
     ESL_PWM_BLINK_FAST  = 2,
     ESL_PWM_CONST_ON    = 3,
 } esl_pwm_blink_mode_t;
+
+typedef enum {
+    ESL_USB_MSG_TYPE_SUCCESS    = 0,
+    ESL_USB_MSG_TYPE_ERROR      = 1,
+    ESL_USB_MSG_TYPE_INPUT      = 2,
+    ESL_USB_MSG_TYPE_WARNING    = 3
+} esl_usb_msg_type_t;
 
 /**
  * Static & Global Variables
@@ -100,7 +117,7 @@ static volatile bool single_click_processed = false;
 static char m_rx_buffer[READ_SIZE];
 static volatile bool esl_usb_tx_done;
 static char command_buffer[ESL_USB_COMM_BUFFER_SIZE];
-static volatile char* current_command;
+static volatile char* current_command = command_buffer;
 
 /**
  * Functions' Forward Declarations
@@ -109,7 +126,7 @@ static volatile char* current_command;
 // INIT FUNCTIONS
 void init_button_interrupt();
 void init_timers();
-void init_pwm();
+static void init_pwm();
 static void lfclk_request(void);
 static void esl_nvmc_init();
 
@@ -133,6 +150,7 @@ static void esl_nvmc_write_rgb();
 
 // USB Functions
 void process_command();
+void esl_usb_msg_write(const char* msg, esl_usb_msg_type_t msg_type);
 
 APP_USBD_CDC_ACM_GLOBAL_DEF(
     esl_usb_cdc_acm,
@@ -217,7 +235,6 @@ static void lfclk_request(void)
 }
 
 static void esl_nvmc_init() {
-    // pg_addr = ((NRF_FICR->CODESIZE - 1) * NRF_FICR->CODEPAGESIZE);
     uint32_t BOOTLOADER_START_ADDR = 0x000E0000;
     uint32_t PAGE_SIZE = 0x1000;
 
@@ -276,7 +293,6 @@ void debounce_timeout_handler(void *p_context) {
             current_blink_mode = ESL_PWM_CONST_OFF;
         }
         NRF_LOG_INFO("INPUT MODE CHANGED: %d", current_input_mode);
-
         app_timer_stop(double_click_timer_id);
     }
 }
@@ -307,24 +323,22 @@ static void esl_usb_ev_handler(app_usbd_class_inst_t const * p_inst,
     }
     case APP_USBD_CDC_ACM_USER_EVT_TX_DONE:
     {
-        NRF_LOG_INFO("TX DONE");
+        NRF_LOG_INFO("TX DONE!");
         esl_usb_tx_done = true;
         break;
     }
     case APP_USBD_CDC_ACM_USER_EVT_RX_DONE:
     {
-        NRF_LOG_INFO("RX DONE");
         ret_code_t ret;
         do
         {
-            esl_usb_tx_done = false;
             if (m_rx_buffer[0] == '\r' || m_rx_buffer[0] == '\n')
-            {
+            {                
+                app_usbd_cdc_acm_write(&esl_usb_cdc_acm, "\r\n", 2);
+                
                 *current_command = '\0';
-                ret = app_usbd_cdc_acm_write(&esl_usb_cdc_acm, "\r\n", 2);
+                current_command = command_buffer;                
                 process_command();
-                led_off_all();
-                current_command = command_buffer;
             }
             else
             {
@@ -332,17 +346,14 @@ static void esl_usb_ev_handler(app_usbd_class_inst_t const * p_inst,
                 {
                     *current_command = m_rx_buffer[0];
                     current_command++;
+                } else {
+                    NRF_LOG_ERROR("Too long command");
+                    current_command = command_buffer;
                 }
-                ret = app_usbd_cdc_acm_write(&esl_usb_cdc_acm,
-                                             m_rx_buffer,
-                                             READ_SIZE);
-            }
 
-            while (!esl_usb_tx_done)
-            {
-                while(app_usbd_event_queue_process()) {
-                    // wait untill write is done
-                }
+                app_usbd_cdc_acm_write(&esl_usb_cdc_acm,
+                                       m_rx_buffer,
+                                       READ_SIZE);
             }
 
             /* Fetch data until internal buffer is empty */
@@ -368,6 +379,8 @@ void led_timer_timeout_handler(void * p_context) {
         case ESL_PWM_IN_BRIGHTNESS:
             esl_pwm_update_led1();
             if (is_pressed() && single_click_processed) {
+                esl_pwm_update_hsv();
+                hsv_to_rgb(hue, saturation, brightness, &r_val, &g_val, &b_val);
                 esl_pwm_update_rgb();
             }
             esl_pwm_play_seq();
@@ -478,8 +491,6 @@ static void esl_pwm_update_led1() {
 }
 
 static void esl_pwm_update_rgb() {
-    esl_pwm_update_hsv();
-    hsv_to_rgb(hue, saturation, brightness, &r_val, &g_val, &b_val);
     esl_pwm_update_duty_cycle(LED_R, r_val);
     esl_pwm_update_duty_cycle(LED_G, g_val);
     esl_pwm_update_duty_cycle(LED_B, b_val);
@@ -512,14 +523,14 @@ static void esl_nvmc_write_rgb()
 
 // USB
 void process_command() {
-    char temp_cmd[256];
+    char temp_cmd[ESL_USB_COMM_BUFFER_SIZE + 1];
     strncpy(temp_cmd, (const char*)current_command, sizeof(temp_cmd) - 1);
     temp_cmd[sizeof(temp_cmd) - 1] = '\0';
 
     // Split the command
     char* token = strtok(temp_cmd, " ");
     if (!token) {
-        NRF_LOG_ERROR("No command provided");
+        esl_usb_msg_write("No command provided", ESL_USB_MSG_TYPE_ERROR);
         return;
     }
 
@@ -544,12 +555,15 @@ void process_command() {
                 g_val = vals[1];
                 b_val = vals[2];
                 rgb_to_hsv(r_val, g_val, b_val, &hue, &saturation, &brightness);
-                NRF_LOG_INFO("RGB updated: R=%d, G=%d, B=%d", r_val, g_val, b_val);
+                esl_pwm_update_rgb();
+                char rgb_msg[100];
+                snprintf(rgb_msg, sizeof(rgb_msg), "RGB updated: R=%d, G=%d, B=%d", r_val, g_val, b_val);
+                esl_usb_msg_write(rgb_msg, ESL_USB_MSG_TYPE_SUCCESS);
             } else {
-                NRF_LOG_ERROR("RGB values out of range (0-255)");
+                esl_usb_msg_write("RGB values out of range (0-255)", ESL_USB_MSG_TYPE_ERROR);
             }
         } else {
-            NRF_LOG_ERROR("RGB command requires 3 arguments");
+            esl_usb_msg_write("RGB command requires 3 arguments", ESL_USB_MSG_TYPE_ERROR);
         }
     }
     else if (strcmp(command, "hsv") == 0) {
@@ -557,25 +571,68 @@ void process_command() {
             if (vals[0] >= 0 && vals[0] <= 360 &&
                 vals[1] >= 0 && vals[1] <= 100 &&
                 vals[2] >= 0 && vals[2] <= 100) {
+                NRF_LOG_INFO("h: %d s: %d v: %d", vals[0], vals[1], vals[2]);
                 hue = vals[0];
                 saturation = vals[1];
                 brightness = vals[2];
                 hsv_to_rgb(hue, saturation, brightness, &r_val, &g_val, &b_val);
-                NRF_LOG_INFO("HSV updated: H=%d, S=%d, V=%d", hue, saturation, brightness);
+                esl_pwm_update_rgb();
+                char hsv_msg[100];
+                snprintf(hsv_msg, sizeof(hsv_msg), "HSV updated: H=%d, S=%d, V=%d", hue, saturation, brightness);
+                esl_usb_msg_write(hsv_msg, ESL_USB_MSG_TYPE_SUCCESS);
             } else {
-                NRF_LOG_ERROR("HSV values out of range (H: 0-360, S/V: 0-100)");
+                esl_usb_msg_write("HSV values out of range (H: 0-360, S/V: 0-100)", ESL_USB_MSG_TYPE_ERROR);
             }
         } else {
-            NRF_LOG_ERROR("HSV command requires 3 arguments");
+            esl_usb_msg_write("HSV command requires 3 arguments", ESL_USB_MSG_TYPE_ERROR);
         }
     }
     else if (strcmp(command, "help") == 0) {
-        NRF_LOG_INFO("Available commands:\nrgb <R> <G> <B>: set new color based on RGB\nhsv <H> <S> <V>: set new color based on HSV\nhelp - show this message");
+        const char* help_msg = "Available commands:\n\rrgb <R> <G> <B>: set new color based on RGB\n\rhsv <H> <S> <V>: set new color based on HSV\n\rhelp - show this message";
+        esl_usb_msg_write(help_msg, ESL_USB_MSG_TYPE_SUCCESS);
     }
     else {
-        NRF_LOG_ERROR("Unknown command");
+        esl_usb_msg_write("Unknown command", ESL_USB_MSG_TYPE_ERROR);
     }
 
     free(command);
-    free(temp_cmd);
+}
+
+void esl_usb_msg_write(const char* msg, esl_usb_msg_type_t msg_type) {
+    char formatted_msg[1024]; // Buffer for the formatted message
+
+    switch (msg_type) {
+    case ESL_USB_MSG_TYPE_INPUT:
+        snprintf(formatted_msg, sizeof(formatted_msg), ANSI_COLOR_GREEN ">>> " ANSI_COLOR_WHITE "%s" ANSI_COLOR_RESET "\n\r", msg);
+        break;
+
+    case ESL_USB_MSG_TYPE_SUCCESS:
+        snprintf(formatted_msg, sizeof(formatted_msg), ANSI_COLOR_GREEN "[SUCCESS] " ANSI_COLOR_WHITE "%s" ANSI_COLOR_RESET "\n\r", msg);
+        break;
+
+    case ESL_USB_MSG_TYPE_ERROR:
+        snprintf(formatted_msg, sizeof(formatted_msg), ANSI_COLOR_RED "[ERROR] " ANSI_COLOR_WHITE "%s" ANSI_COLOR_RESET "\n\r", msg);
+        break;
+
+    case ESL_USB_MSG_TYPE_WARNING:
+        snprintf(formatted_msg, sizeof(formatted_msg), ANSI_COLOR_YELLOW "[WARNING] " ANSI_COLOR_WHITE "%s" ANSI_COLOR_RESET "\n\r", msg);
+        break;
+
+    default:
+        snprintf(formatted_msg, sizeof(formatted_msg), ANSI_COLOR_RED "[UNKNOWN] " ANSI_COLOR_WHITE "%s" ANSI_COLOR_RESET "\n\r", msg);
+        break;
+    }
+
+    ret_code_t ret = app_usbd_cdc_acm_write(&esl_usb_cdc_acm, formatted_msg, strlen(formatted_msg));
+    esl_usb_tx_done = false;
+    if (ret == NRF_SUCCESS) {
+        while (!esl_usb_tx_done)
+        {
+            while (app_usbd_event_queue_process())
+            {
+                /* Wait until we're ready to send the data again */
+            }
+        }
+        
+    }
 }
