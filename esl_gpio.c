@@ -27,6 +27,6 @@ void led_off(esl_io_pin_t pin) {
     nrf_gpio_pin_write(pin, 1);
 }
 
-bool is_pressed() {
+bool btn_is_pressed(void) {
     return !nrf_gpio_pin_read(SW1);
 }

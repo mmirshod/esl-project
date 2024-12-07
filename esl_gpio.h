@@ -20,6 +20,6 @@ void cfg_pins(void);                // Configure pins
 void led_off_all(void);             // Turn off all LEDs
 void led_on(esl_io_pin_t pin);      // Turn on a specified LED
 void led_off(esl_io_pin_t pin);     // Turn off a specified LED
-bool is_pressed(void);              // Is the SW1 pressed or not
+bool btn_is_pressed(void);              // Is the SW1 pressed or not
 
 #endif // ESL_GPIO_H
