@@ -140,15 +140,15 @@
 #endif
 
 #ifndef DEBOUNCE_DELAY_MS
-#define DEBOUNCE_DELAY_MS           50
+#define DEBOUNCE_DELAY_MS           20
 #endif
 
 #ifndef DOUBLE_CLICK_DELAY_MS
-#define DOUBLE_CLICK_DELAY_MS       300
+#define DOUBLE_CLICK_DELAY_MS       200
 #endif
 
-#ifndef ESL_NVMC_BLOCK_VALID
-#define ESL_NVMC_BLOCK_VALID        (0xA5)
+#ifndef ESL_NVMC_BYTE_VALID
+#define ESL_NVMC_BYTE_VALID        (0xA5)
 #endif
 
 #ifndef CDC_ACM_COMM_INTERFACE
@@ -177,6 +177,26 @@
 
 #ifndef READ_SIZE
 #define READ_SIZE 1
+#endif
+
+#ifndef ANSI_COLOR_GREEN
+#define ANSI_COLOR_GREEN "\033[32m"
+#endif
+
+#ifndef ANSI_COLOR_RED
+#define ANSI_COLOR_RED   "\033[31m"
+#endif
+
+#ifndef ANSI_COLOR_YELLOW
+#define ANSI_COLOR_YELLOW "\033[33m"
+#endif
+
+#ifndef ANSI_COLOR_WHITE
+#define ANSI_COLOR_WHITE "\033[37m"
+#endif
+
+#ifndef ANSI_COLOR_RESET
+#define ANSI_COLOR_RESET "\033[0m"
 #endif
 
 #endif
