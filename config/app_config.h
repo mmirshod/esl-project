@@ -148,55 +148,59 @@
 #endif
 
 #ifndef ESL_NVMC_BYTE_VALID
-#define ESL_NVMC_BYTE_VALID        (0xA5)
+#define ESL_NVMC_BYTE_VALID         (0xA5)
+#endif
+
+#ifndef ESL_NVMC_BYTE_NOT_INIT
+#define ESL_NVMC_BYTE_NOT_INIT      (0xFF)
 #endif
 
 #ifndef CDC_ACM_COMM_INTERFACE
-#define CDC_ACM_COMM_INTERFACE 2
+#define CDC_ACM_COMM_INTERFACE      2
 #endif
 
 #ifndef CDC_ACM_COMM_EPIN
-#define CDC_ACM_COMM_EPIN NRF_DRV_USBD_EPIN3
+#define CDC_ACM_COMM_EPIN           NRF_DRV_USBD_EPIN3
 #endif
 
 #ifndef CDC_ACM_DATA_INTERFACE
-#define CDC_ACM_DATA_INTERFACE 3
+#define CDC_ACM_DATA_INTERFACE      3
 #endif
 
 #ifndef CDC_ACM_DATA_EPIN
-#define CDC_ACM_DATA_EPIN NRF_DRV_USBD_EPIN4
+#define CDC_ACM_DATA_EPIN           NRF_DRV_USBD_EPIN4
 #endif
 
 #ifndef CDC_ACM_DATA_EPOUT
-#define CDC_ACM_DATA_EPOUT NRF_DRV_USBD_EPOUT4
+#define CDC_ACM_DATA_EPOUT          NRF_DRV_USBD_EPOUT4
 #endif
 
 #ifndef ESL_USB_COMM_BUFFER_SIZE
-#define ESL_USB_COMM_BUFFER_SIZE 24
+#define ESL_USB_COMM_BUFFER_SIZE    64
 #endif
 
 #ifndef READ_SIZE
-#define READ_SIZE 1
+#define READ_SIZE                   1
 #endif
 
 #ifndef ANSI_COLOR_GREEN
-#define ANSI_COLOR_GREEN "\033[32m"
+#define ANSI_COLOR_GREEN            "\033[32m"
 #endif
 
 #ifndef ANSI_COLOR_RED
-#define ANSI_COLOR_RED   "\033[31m"
+#define ANSI_COLOR_RED              "\033[31m"
 #endif
 
 #ifndef ANSI_COLOR_YELLOW
-#define ANSI_COLOR_YELLOW "\033[33m"
+#define ANSI_COLOR_YELLOW           "\033[33m"
 #endif
 
 #ifndef ANSI_COLOR_WHITE
-#define ANSI_COLOR_WHITE "\033[37m"
+#define ANSI_COLOR_WHITE            "\033[37m"
 #endif
 
 #ifndef ANSI_COLOR_RESET
-#define ANSI_COLOR_RESET "\033[0m"
+#define ANSI_COLOR_RESET            "\033[0m"
 #endif
 
 #endif
