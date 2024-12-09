@@ -42,27 +42,21 @@ typedef enum {
 } esl_ret_code_t;
 
 typedef struct {
-        uint8_t magic_number;
-        uint8_t r_val;
-        uint8_t g_val;
-        uint8_t b_val;
+    uint8_t magic_number;
+    uint8_t r_val;
+    uint8_t g_val;
+    uint8_t b_val;
+} esl_nvmc_rgb_data_t;
+
+typedef union {
+    struct
+    {
+        esl_nvmc_rgb_data_t rgb_data;
+        uint32_t            color_number;
+        char                color_name[32];
     } fields;
-    uint32_t bits; 
-} esl_nvmc_rgb_data;
-
-typedef enum {
-    ESL_PWM_IN_NO_INPUT    =   0,
-    ESL_PWM_IN_HUE         =   1,
-    ESL_PWM_IN_SATURATION  =   2,
-    ESL_PWM_IN_BRIGHTNESS  =   3,
-} esl_pwm_in_mode_t;
-
-typedef enum {
-    ESL_PWM_CONST_OFF   = 0,
-    ESL_PWM_BLINK_SLOW  = 1,
-    ESL_PWM_BLINK_FAST  = 2,
-    ESL_PWM_CONST_ON    = 3,
-} esl_pwm_blink_mode_t;
+    uint8_t bits[40];
+} esl_nvmc_saved_color_t;
 
 typedef enum {
     ESL_USB_MSG_TYPE_SUCCESS    = 0,
@@ -71,43 +65,26 @@ typedef enum {
     ESL_USB_MSG_TYPE_WARNING    = 3
 } esl_usb_msg_type_t;
 
+typedef char* esl_cli_cmd_arg_t;
+
+typedef esl_ret_code_t (*esl_cli_cmd_handler_t)(esl_cli_cmd_arg_t *args, int arg_count);
+
+typedef struct {
+    const char *command_name;
+    const char *command_description;
+    esl_cli_cmd_handler_t handler;
+    int args_count;                  // Number of expected args
+} esl_cli_cmd_entry_t;
+
 /**
  * Static & Global Variables
  */
-
-// COLORS
-// default values for HSV
-static uint8_t brightness = 100;  // a.k.a Value
-static uint8_t saturation = 100;
-static uint16_t hue = 63;  // in degrees
-
-// default values based on HSV
-static uint8_t r_val = 242;
-static uint8_t g_val = 255;
-static uint8_t b_val = 0;
+static esl_pwm_context_t pwm_ctx;
 
 // NVMC
-static esl_nvmc_rgb_data rgb_flash = {
-    .fields = {
-        .magic_number = ESL_NVMC_BLOCK_VALID,
-        .r_val = 242,
-        .g_val = 255,
-        .b_val = 0
-    }
-};
-static uint32_t pg_addr = 0;
-
-// PWM
-static nrfx_pwm_t pwm_instance = NRFX_PWM_INSTANCE(0);
-static nrf_pwm_values_individual_t pwm_seq_values;
-static nrf_pwm_sequence_t const pwm_sequnce = {
-    .values.p_individual = &pwm_seq_values,
-    .length              = NRF_PWM_VALUES_LENGTH(pwm_seq_values),
-    .repeats             = 0,
-    .end_delay           = 0
-};
-static volatile esl_pwm_in_mode_t current_input_mode = ESL_PWM_IN_NO_INPUT;
-static volatile esl_pwm_blink_mode_t current_blink_mode = ESL_PWM_CONST_OFF;
+static uint32_t curr_addr = SAVED_COLORS_PG_ADDR;
+static esl_nvmc_saved_color_t * saved_colors;
+static uint32_t saved_colors_count = 0;
 
 // TIMERS
 APP_TIMER_DEF(debounce_timer_id);
@@ -131,7 +108,6 @@ static volatile char* current_command = command_buffer;
 // INIT FUNCTIONS
 void init_button_interrupt();
 void init_timers();
-static void init_pwm();
 static void lfclk_request(void);
 static void esl_nvmc_init();
 
@@ -143,19 +119,40 @@ static void esl_usb_ev_handler(app_usbd_class_inst_t const * p_inst,
 void button_gpiote_handler(nrfx_gpiote_pin_t pin, nrf_gpiote_polarity_t action);
 void led_timer_timeout_handler(void * p_context);
 
-// PWM Functions
-static void esl_pwm_update_duty_cycle(esl_io_pin_t out_pin, uint8_t val);
-void esl_pwm_update_hsv();
-static void esl_pwm_update_led1();
-static void esl_pwm_update_rgb();
-static void esl_pwm_play_seq();
-
 // NVMC Functions
-static void esl_nvmc_write_rgb();
+static esl_ret_code_t esl_nvmc_write(uint32_t addr, uint32_t bits);
+static esl_ret_code_t esl_nvmc_save_curr_rgb();
 
 // USB Functions
 void process_command();
 void esl_usb_msg_write(const char* msg, esl_usb_msg_type_t msg_type);
+// static uint32_t esl_nvmc_get_curr_addr(uint32_t start_pg_addr);
+
+// Command handlers
+esl_ret_code_t esl_cli_cmd_rgb(esl_cli_cmd_arg_t *args, int arg_count);
+esl_ret_code_t esl_cli_cmd_hsv(esl_cli_cmd_arg_t *args, int arg_count);
+esl_ret_code_t esl_cli_cmd_add_rgb_color(esl_cli_cmd_arg_t *args, int arg_count);
+esl_ret_code_t esl_cli_cmd_add_hsv_color(esl_cli_cmd_arg_t *args, int arg_count);
+esl_ret_code_t esl_cli_cmd_add_current_color(esl_cli_cmd_arg_t *args, int arg_count);
+esl_ret_code_t esl_cli_cmd_list_colors(esl_cli_cmd_arg_t *args, int arg_count);
+esl_ret_code_t esl_cli_cmd_help(esl_cli_cmd_arg_t *args, int arg_count);
+esl_ret_code_t esl_cli_cmd_apply_color(esl_cli_cmd_arg_t *args, int arg_count);
+
+esl_cli_cmd_handler_t esl_cli_cmd_handler_find(char* cmd_name);
+
+static esl_cli_cmd_entry_t command_table[] = {
+    { "rgb", "rgb <R> <G> <B>: set new color based on RGB\n\r", esl_cli_cmd_rgb, 3 },
+    { "hsv", "hsv <H> <S> <V>: set new color based on HSV\n\r", esl_cli_cmd_hsv, 3 },
+    { "add_rgb_color", "add_rgb_color <R> <G> <B> <color_name>: save RGB color\n\r", esl_cli_cmd_add_rgb_color, 4 },
+    { "add_hsv_color", "add_hsv_color <H> <S> <V> <color_name>: save HSV color\n\r", esl_cli_cmd_add_hsv_color, 4 },
+    { "add_current_color", "add_current_color <color_name>: save current color\n\r", esl_cli_cmd_add_current_color, 1 },
+    { "apply_color", "apply_color <color_name>: apply saved color\n\r", esl_cli_cmd_apply_color, 1 },
+    { "list_colors", "list_colors: display all saved colors\n\r", esl_cli_cmd_list_colors, 0 },
+    { "help", "help: show list of commands\n\r", esl_cli_cmd_help, 0 }
+};
+
+#define ESL_CLI_CMD_MAX_ARGS 4
+#define COMMAND_TABLE_SIZE (sizeof(command_table) / sizeof(command_table[0]))
 
 APP_USBD_CDC_ACM_GLOBAL_DEF(
     esl_usb_cdc_acm,
@@ -178,8 +175,9 @@ int main(void) {
     NRF_LOG_DEFAULT_BACKENDS_INIT();
     cfg_pins();
     led_off_all();
-    init_pwm();
     esl_nvmc_init();
+
+    esl_pwm_init(&pwm_ctx);
 
     app_usbd_class_inst_t const * class_cdc_acm = app_usbd_cdc_acm_class_inst_get(&esl_usb_cdc_acm);
     ret = app_usbd_class_append(class_cdc_acm);
@@ -212,26 +210,6 @@ void init_timers() {
     app_timer_create(&led_timer_id, APP_TIMER_MODE_REPEATED, led_timer_timeout_handler);
 }
 
-static void init_pwm() {
-    nrfx_pwm_config_t pwm_config = NRFX_PWM_DEFAULT_CONFIG;
-    
-    // configure output pins
-    pwm_config.output_pins[0] = LED1;
-    pwm_config.output_pins[1] = LED_R;
-    pwm_config.output_pins[2] = LED_G;
-    pwm_config.output_pins[3] = LED_B;
-
-    // configure top_value
-    pwm_config.top_value = PWM_TOP_VAL;
-    // configure step mode
-    pwm_config.step_mode = NRF_PWM_STEP_AUTO;
-    // configure load mode
-    pwm_config.load_mode = NRF_PWM_LOAD_INDIVIDUAL;
-    pwm_config.base_clock = NRF_PWM_CLK_500kHz;
-
-    nrfx_pwm_init(&pwm_instance, &pwm_config, NULL);
-}
-
 static void lfclk_request(void)
 {
     ret_code_t err_code = nrf_drv_clock_init();
@@ -240,24 +218,48 @@ static void lfclk_request(void)
 }
 
 static void esl_nvmc_init() {
-    uint32_t BOOTLOADER_START_ADDR = 0x000E0000;
-    uint32_t PAGE_SIZE = 0x1000;
+    // Retrieve last saved color
+    esl_nvmc_saved_color_t * retrieved_rgb = (esl_nvmc_saved_color_t *)LAST_COLOR_PG_ADDR;
+    if (retrieved_rgb->fields.rgb_data.magic_number == ESL_NVMC_BYTE_VALID && retrieved_rgb->fields.color_number == 0) {
+        pwm_ctx.rgb_state.red = retrieved_rgb->fields.rgb_data.r_val;
+        pwm_ctx.rgb_state.green = retrieved_rgb->fields.rgb_data.g_val;
+        pwm_ctx.rgb_state.blue = retrieved_rgb->fields.rgb_data.b_val;
 
-    pg_addr = BOOTLOADER_START_ADDR - 3 * PAGE_SIZE;
-    
-    esl_nvmc_rgb_data* retrieved_rgb = (esl_nvmc_rgb_data*)pg_addr;
-
-    if (retrieved_rgb->fields.magic_number == ESL_NVMC_BLOCK_VALID) {
-        NRF_LOG_INFO("Written RGB Values\nR: %d, G: %d, B: %d\nAddress: 0x%x, MAGIC NUMBER: 0x%x", retrieved_rgb->fields.r_val, retrieved_rgb->fields.g_val, retrieved_rgb->fields.b_val, pg_addr, retrieved_rgb->fields.magic_number);
-        r_val = retrieved_rgb->fields.r_val;
-        g_val = retrieved_rgb->fields.g_val;
-        b_val = retrieved_rgb->fields.b_val;
-        NRF_LOG_INFO("Updating HSV...");   
-        rgb_to_hsv(r_val, g_val, b_val, &hue, &saturation, &brightness);
-        NRF_LOG_INFO("NEW HSV: %d, %d, %d", hue, saturation, brightness);
+        rgb_to_hsv(
+            pwm_ctx.rgb_state.red,
+            pwm_ctx.rgb_state.green,
+            pwm_ctx.rgb_state.blue,
+            &pwm_ctx.hsv_state.hue,
+            &pwm_ctx.hsv_state.saturation,
+            &pwm_ctx.hsv_state.brightness
+        );
+    } else {
+        nrfx_nvmc_page_erase(LAST_COLOR_PG_ADDR);
     }
 
-    nrfx_nvmc_page_erase(pg_addr);
+    // Retrieve all user saved colors
+    saved_colors = (esl_nvmc_saved_color_t *)malloc(APP_DATA_END_ADDR - APP_DATA_START_ADDR);
+
+    if (saved_colors == NULL) {
+        NRF_LOG_ERROR("Memory allocation failed!");
+        return;
+    }
+
+    while (curr_addr < SAVED_COLORS_PG_ADDR + PAGE_SIZE) {
+        esl_nvmc_saved_color_t * retrieved_color = (esl_nvmc_saved_color_t*)curr_addr;
+
+        if (retrieved_color->fields.rgb_data.magic_number == ESL_NVMC_BYTE_VALID) {
+            saved_colors[saved_colors_count++] = *retrieved_color;
+            curr_addr += sizeof(esl_nvmc_saved_color_t);
+        } else if (retrieved_color->fields.rgb_data.magic_number == ESL_NVMC_BYTE_NOT_INIT) {
+            NRF_LOG_INFO("Retrieved all saved colors!");
+            return;
+        } else {
+            NRF_LOG_ERROR("Memory Corrupted");
+            nrfx_nvmc_page_erase(SAVED_COLORS_PG_ADDR);
+            break;
+        }
+    }
 }
 
 void init_button_interrupt() {
@@ -265,22 +267,19 @@ void init_button_interrupt() {
         nrfx_gpiote_init();
     }
 
-    nrfx_gpiote_in_config_t in_config = NRFX_GPIOTE_CONFIG_IN_SENSE_HITOLO(true);
+    nrfx_gpiote_in_config_t in_config = NRFX_GPIOTE_CONFIG_IN_SENSE_LOTOHI(true);
     in_config.pull = NRF_GPIO_PIN_PULLUP;
     nrfx_gpiote_in_init(SW1, &in_config, button_gpiote_handler);
     nrfx_gpiote_in_event_enable(SW1, true);
 }
 
 // HANDLERS
-
 void button_gpiote_handler(nrfx_gpiote_pin_t pin, nrf_gpiote_polarity_t action) {
     if (pin == SW1) {
         single_click_processed = false;
         app_timer_start(debounce_timer_id, DEBOUNCE_DELAY, NULL);
     }
 }
-
-
 
 void debounce_timeout_handler(void *p_context) {
     // Start the double-click timer to detect a second click
@@ -290,15 +289,14 @@ void debounce_timeout_handler(void *p_context) {
     } else {
         // Second click detected within the delay
         awaiting_second_click = false;
-        if (current_input_mode++ == ESL_PWM_IN_BRIGHTNESS) {
-            current_input_mode = ESL_PWM_IN_NO_INPUT;
-            esl_nvmc_write_rgb();
+        if (pwm_ctx.current_input_mode++ == ESL_PWM_IN_BRIGHTNESS) {
+            pwm_ctx.current_input_mode = ESL_PWM_IN_NO_INPUT;
+            esl_nvmc_save_curr_rgb();
         }
-        if (current_blink_mode++ == ESL_PWM_CONST_ON) {
-            current_blink_mode = ESL_PWM_CONST_OFF;
+        if (pwm_ctx.current_blink_mode++ == ESL_PWM_CONST_ON) {
+            pwm_ctx.current_blink_mode = ESL_PWM_CONST_OFF;
         }
-        NRF_LOG_INFO("INPUT MODE CHANGED: %d", current_input_mode);
-        app_timer_stop(double_click_timer_id);
+        NRF_LOG_INFO("INPUT MODE CHANGED: %d", pwm_ctx.current_input_mode);
     }
 }
 
@@ -309,7 +307,7 @@ void double_click_timeout_handler(void *p_context) {
 }
 
 static void esl_usb_ev_handler(app_usbd_class_inst_t const * p_inst,
-                           app_usbd_cdc_acm_user_event_t event)
+                               app_usbd_cdc_acm_user_event_t event)
 {
     switch (event)
     {
@@ -328,7 +326,6 @@ static void esl_usb_ev_handler(app_usbd_class_inst_t const * p_inst,
     }
     case APP_USBD_CDC_ACM_USER_EVT_TX_DONE:
     {
-        NRF_LOG_INFO("TX DONE!");
         esl_usb_tx_done = true;
         break;
     }
@@ -338,11 +335,11 @@ static void esl_usb_ev_handler(app_usbd_class_inst_t const * p_inst,
         do
         {
             if (m_rx_buffer[0] == '\r' || m_rx_buffer[0] == '\n')
-            {                
+            {
                 app_usbd_cdc_acm_write(&esl_usb_cdc_acm, "\r\n", 2);
-                
+
                 *current_command = '\0';
-                current_command = command_buffer;                
+                current_command = command_buffer;
                 process_command();
             }
             else
@@ -352,7 +349,7 @@ static void esl_usb_ev_handler(app_usbd_class_inst_t const * p_inst,
                     *current_command = m_rx_buffer[0];
                     current_command++;
                 } else {
-                    NRF_LOG_ERROR("Too long command");
+                    esl_usb_msg_write("Too long command", ESL_USB_MSG_TYPE_ERROR);
                     current_command = command_buffer;
                 }
 
@@ -374,160 +371,73 @@ static void esl_usb_ev_handler(app_usbd_class_inst_t const * p_inst,
 }
 
 void led_timer_timeout_handler(void * p_context) {
-    switch (current_input_mode) {
-        case ESL_PWM_IN_NO_INPUT:
-            esl_pwm_update_led1();
-            esl_pwm_play_seq();
-            break;
-        case ESL_PWM_IN_HUE:
-        case ESL_PWM_IN_SATURATION:
-        case ESL_PWM_IN_BRIGHTNESS:
-            esl_pwm_update_led1();
-            if (is_pressed() && single_click_processed) {
-                esl_pwm_update_hsv();
-                hsv_to_rgb(hue, saturation, brightness, &r_val, &g_val, &b_val);
-                esl_pwm_update_rgb();
-            }
-            esl_pwm_play_seq();
-            break;
-        default:
-            break;
-    }
-}
-
-// PWM Functions
-static void esl_pwm_update_duty_cycle(esl_io_pin_t out_pin, uint8_t val) {
-    switch (out_pin)
-    {
-    case LED1:
-        pwm_seq_values.channel_0 = val > PWM_TOP_VAL ? PWM_TOP_VAL : val;
-        break;
-    case LED_R:
-        pwm_seq_values.channel_1 = val > PWM_TOP_VAL ? PWM_TOP_VAL : val;
-        break;
-    case LED_G:
-        pwm_seq_values.channel_2 = val > PWM_TOP_VAL ? PWM_TOP_VAL : val;
-        break;
-    case LED_B:
-        pwm_seq_values.channel_3 = val > PWM_TOP_VAL ? PWM_TOP_VAL : val;
-        break;
-    default:
-        break;
-    }
-}
-
-void esl_pwm_update_hsv() {
-    static bool hue_direction = true;
-    static bool saturation_direction = true;
-    static bool brightness_direction = true;
-    switch (current_input_mode)
-    {
-    case ESL_PWM_IN_HUE:
-        if (hue_direction) {
-            hue += HSV_STEP;
-            if (hue >= 360) {
-                hue = 360;
-                hue_direction = !hue_direction; // Reverse direction
-            }
-        } else {
-            hue -= HSV_STEP;
-            if (hue <= 0) {
-                hue = 0;
-                hue_direction = !hue_direction; // Reverse direction
-            }
+    esl_pwm_update_led1(&pwm_ctx);
+    if (pwm_ctx.current_input_mode != ESL_PWM_IN_NO_INPUT) {
+        if (btn_is_pressed() && single_click_processed) {
+            esl_pwm_update_hsv(&pwm_ctx);
+            hsv_to_rgb(
+                pwm_ctx.hsv_state.hue,
+                pwm_ctx.hsv_state.saturation,
+                pwm_ctx.hsv_state.brightness,
+                &pwm_ctx.rgb_state.red,
+                &pwm_ctx.rgb_state.green,
+                &pwm_ctx.rgb_state.blue
+            );
+            esl_pwm_update_rgb(&pwm_ctx);
         }
-        break;
-
-    case ESL_PWM_IN_SATURATION:
-        if (saturation_direction) {
-            saturation += HSV_STEP;
-            if (saturation >= 100) {
-                saturation = 100;
-                saturation_direction = !saturation_direction; // Reverse direction
-            }
-        } else {
-            saturation -= HSV_STEP;
-            if (saturation <= 0) {
-                saturation = 0;
-                saturation_direction = !saturation_direction; // Reverse direction
-            }
-        }
-    case ESL_PWM_IN_BRIGHTNESS:
-        if (brightness_direction) {
-            brightness += HSV_STEP;
-            if (brightness >= 100) {
-                brightness = 100;
-                brightness_direction = !brightness_direction; // Reverse direction
-            }
-        } else {
-            brightness -= HSV_STEP;
-            if (brightness <= 0) {
-                brightness = 0;
-                brightness_direction = !brightness_direction; // Reverse direction
-            }
-        }
-    default:
-        break;
     }
-}
 
-static void esl_pwm_update_led1() {
-    static bool led1_direction = true;
-    static int led1_duty_cycle = 0;
-    int step = current_blink_mode == ESL_PWM_BLINK_SLOW ? 5 : 20;
-    
-    if (current_blink_mode == ESL_PWM_CONST_OFF) {
-        esl_pwm_update_duty_cycle(LED1, 0);
-    } else if (current_blink_mode == ESL_PWM_CONST_ON) {
-        esl_pwm_update_duty_cycle(LED1, PWM_TOP_VAL * 0.9);
-    } else if (current_blink_mode == ESL_PWM_BLINK_SLOW || current_blink_mode == ESL_PWM_BLINK_FAST) {
-        if (led1_direction) led1_duty_cycle += step;
-        else led1_duty_cycle -= step;
-
-        if (led1_duty_cycle >= PWM_TOP_VAL * 0.9) {
-            led1_direction = !led1_direction;
-            led1_duty_cycle = PWM_TOP_VAL * 0.9;
-        } else if (led1_duty_cycle <= 0) {
-            led1_direction = !led1_direction;
-            led1_duty_cycle = 0;
-        }
-        esl_pwm_update_duty_cycle(LED1, led1_duty_cycle);
-    }
-}
-
-static void esl_pwm_update_rgb() {
-    esl_pwm_update_duty_cycle(LED_R, r_val);
-    esl_pwm_update_duty_cycle(LED_G, g_val);
-    esl_pwm_update_duty_cycle(LED_B, b_val);
-}
-
-static void esl_pwm_play_seq() {
-    (void)nrfx_pwm_simple_playback(&pwm_instance, &pwm_sequnce, 1, NRFX_PWM_FLAG_LOOP); 
+    esl_pwm_play_seq(&pwm_ctx);
 }
 
 // NVMC
-static void esl_nvmc_write_rgb()
+static esl_ret_code_t esl_nvmc_write(uint32_t addr, uint32_t bits)
 {
-    nrfx_nvmc_page_erase(pg_addr);
-    rgb_flash.fields.r_val = r_val;
-    rgb_flash.fields.g_val = g_val;
-    rgb_flash.fields.b_val = b_val;
-    NRF_LOG_INFO("Writing RGB Values...\nR: %d, G: %d, B: %d\nAddress: 0x%x", r_val, g_val, b_val, pg_addr);
-
-    if (!nrfx_nvmc_word_writable_check(pg_addr, rgb_flash.bits)) {
-        NRF_LOG_ERROR("Memory address is not writable!");
-        return;
+    if (!nrfx_nvmc_word_writable_check(addr, bits)) {
+        return ESL_ERR_NVMC_NOT_WRITABLE;
     }
-
-    nrfx_nvmc_word_write(pg_addr, rgb_flash.bits);
+    uint32_t num_words = (bits + 31) / 32;
+    nrfx_nvmc_words_write(addr, bits, num_words);
 
     while (!nrfx_nvmc_write_done_check()) {}
 
-    NRF_LOG_INFO("RGB values written to flash memory!");
+    return ESL_SUCCESS;
+}
+
+static esl_ret_code_t esl_nvmc_save_curr_rgb() {
+    esl_nvmc_saved_color_t curr_rgb = {
+        .fields = {
+            .color_number = 0,
+            .rgb_data = {
+                .magic_number = ESL_NVMC_BYTE_VALID,
+                .r_val = pwm_ctx.rgb_state.red,
+                .g_val = pwm_ctx.rgb_state.green,
+                .b_val = pwm_ctx.rgb_state.blue
+            },
+            .color_name = "LastColor"
+        }
+    };
+
+    nrfx_nvmc_page_erase(LAST_COLOR_PG_ADDR);
+    esl_nvmc_write(LAST_COLOR_PG_ADDR, curr_rgb.bits);
 }
 
 // USB
-void process_command() {
+esl_cli_cmd_handler_t esl_cli_cmd_handler_find(char* cmd_name) {
+    if (cmd_name == NULL) {
+        return NULL;
+    }
+
+    for (int cmd_idx = 0; cmd_idx < COMMAND_TABLE_SIZE; cmd_idx++) {
+        if (strcmp(command_table[cmd_idx].command_name, cmd_name) == 0) {
+            return command_table[cmd_idx].handler;
+        }
+    }
+
+    return NULL;
+}
+
+void esl_cli_process_cmd() {
     char temp_cmd[ESL_USB_COMM_BUFFER_SIZE + 1];
     strncpy(temp_cmd, (const char*)current_command, sizeof(temp_cmd) - 1);
     temp_cmd[sizeof(temp_cmd) - 1] = '\0';
@@ -542,65 +452,157 @@ void process_command() {
     char* command = malloc(strlen(token) + 1);
     strcpy(command, token);
 
-    int vals[3] = {0};
-    int i = 0;
+    esl_cli_cmd_arg_t args[ESL_CLI_CMD_MAX_ARGS];
+    int arg_count = 0;
 
     // Parse values
-    while ((token = strtok(NULL, " ")) != NULL && i < 3) {
-        vals[i] = atoi(token);
-        i++;
+    while (token != NULL) {
+        if (arg_count >= ESL_CLI_CMD_MAX_ARGS) {
+            esl_usb_msg_write("Too many args", ESL_USB_MSG_TYPE_ERROR);
+            return;
+        }
+        args[arg_count] = token;
+        arg_count++;
+        token = strtok(NULL, " ");
     }
 
-    if (strcmp(command, "rgb") == 0) {
-        if (i == 3) {
-            if (vals[0] >= 0 && vals[0] <= 255 &&
-                vals[1] >= 0 && vals[1] <= 255 &&
-                vals[2] >= 0 && vals[2] <= 255) {
-                r_val = vals[0];
-                g_val = vals[1];
-                b_val = vals[2];
-                rgb_to_hsv(r_val, g_val, b_val, &hue, &saturation, &brightness);
-                esl_pwm_update_rgb();
-                char rgb_msg[100];
-                snprintf(rgb_msg, sizeof(rgb_msg), "RGB updated: R=%d, G=%d, B=%d", r_val, g_val, b_val);
-                esl_usb_msg_write(rgb_msg, ESL_USB_MSG_TYPE_SUCCESS);
-            } else {
-                esl_usb_msg_write("RGB values out of range (0-255)", ESL_USB_MSG_TYPE_ERROR);
-            }
-        } else {
-            esl_usb_msg_write("RGB command requires 3 arguments", ESL_USB_MSG_TYPE_ERROR);
+    esl_cli_cmd_handler_t cmd_handler = esl_cli_cmd_handler_find(command);
+    if (cmd_handler) {
+        esl_ret_code_t res = cmd_handler(args, arg_count);
+        if (res != ESL_SUCCESS) {
+            esl_usb_msg_write("Error occurred", ESL_USB_MSG_TYPE_ERROR);
         }
-    }
-    else if (strcmp(command, "hsv") == 0) {
-        if (i == 3) {
-            if (vals[0] >= 0 && vals[0] <= 360 &&
-                vals[1] >= 0 && vals[1] <= 100 &&
-                vals[2] >= 0 && vals[2] <= 100) {
-                NRF_LOG_INFO("h: %d s: %d v: %d", vals[0], vals[1], vals[2]);
-                hue = vals[0];
-                saturation = vals[1];
-                brightness = vals[2];
-                hsv_to_rgb(hue, saturation, brightness, &r_val, &g_val, &b_val);
-                esl_pwm_update_rgb();
-                char hsv_msg[100];
-                snprintf(hsv_msg, sizeof(hsv_msg), "HSV updated: H=%d, S=%d, V=%d", hue, saturation, brightness);
-                esl_usb_msg_write(hsv_msg, ESL_USB_MSG_TYPE_SUCCESS);
-            } else {
-                esl_usb_msg_write("HSV values out of range (H: 0-360, S/V: 0-100)", ESL_USB_MSG_TYPE_ERROR);
-            }
-        } else {
-            esl_usb_msg_write("HSV command requires 3 arguments", ESL_USB_MSG_TYPE_ERROR);
-        }
-    }
-    else if (strcmp(command, "help") == 0) {
-        const char* help_msg = "Available commands:\n\rrgb <R> <G> <B>: set new color based on RGB\n\rhsv <H> <S> <V>: set new color based on HSV\n\rhelp - show this message";
-        esl_usb_msg_write(help_msg, ESL_USB_MSG_TYPE_SUCCESS);
-    }
-    else {
-        esl_usb_msg_write("Unknown command", ESL_USB_MSG_TYPE_ERROR);
+    } else {
+        esl_usb_msg_write("Command not found", ESL_USB_MSG_TYPE_ERROR);
     }
 
     free(command);
+}
+
+// CLI command handlers
+esl_ret_code_t esl_cli_cmd_rgb(esl_cli_cmd_arg_t* args, int args_count) {
+    if (args_count == 3) {
+        uint8_t r_val = atoi(args[0]);
+        uint8_t g_val = atoi(args[1]);
+        uint8_t b_val = atoi(args[2]);
+
+        if (
+            r_val >= 0 && r_val <= 255 &&
+            g_val >= 0 && g_val <= 255 &&
+            b_val >= 0 && b_val <= 255
+        ) {
+            pwm_ctx.rgb_state.red = r_val;
+            pwm_ctx.rgb_state.green = g_val;
+            pwm_ctx.rgb_state.blue = b_val;
+
+            rgb_to_hsv(
+                pwm_ctx.rgb_state.red,
+                pwm_ctx.rgb_state.green,
+                pwm_ctx.rgb_state.blue,
+                &pwm_ctx.hsv_state.hue,
+                &pwm_ctx.hsv_state.saturation,
+                &pwm_ctx.hsv_state.brightness
+            );
+            esl_pwm_update_rgb(&pwm_ctx);
+            char rgb_msg[100];
+            snprintf(
+                rgb_msg, sizeof(rgb_msg), "RGB updated: R=%d, G=%d, B=%d",
+                pwm_ctx.rgb_state.red,
+                pwm_ctx.rgb_state.green,
+                pwm_ctx.rgb_state.blue
+            );
+            esl_usb_msg_write(rgb_msg, ESL_USB_MSG_TYPE_SUCCESS);
+            return ESL_SUCCESS;
+        } else {
+            esl_usb_msg_write("RGB values out of range (0-255)", ESL_USB_MSG_TYPE_ERROR);
+            return NULL;
+        }
+    } else {
+       esl_usb_msg_write("RGB command requires 3 args", ESL_USB_MSG_TYPE_ERROR);
+       return NULL;
+    }
+}
+
+esl_ret_code_t esl_cli_cmd_hsv(esl_cli_cmd_arg_t* args, int args_count) {
+    if (args_count == 3) {
+        uint16_t hue = atoi(args[0]);
+        uint8_t saturation = atoi(args[1]);
+        uint8_t brightness = atoi(args[2]);
+        if (
+            hue >= 0 && hue <= 360 &&
+            saturation >= 0 && saturation <= 100 &&
+            brightness >= 0 && brightness <= 100
+        ) {
+            pwm_ctx.hsv_state.hue = hue;
+            pwm_ctx.hsv_state.saturation = saturation;
+            pwm_ctx.hsv_state.brightness = brightness;
+            hsv_to_rgb(
+                pwm_ctx.hsv_state.hue,
+                pwm_ctx.hsv_state.saturation,
+                pwm_ctx.hsv_state.brightness,
+                &pwm_ctx.rgb_state.red,
+                &pwm_ctx.rgb_state.green,
+                &pwm_ctx.rgb_state.blue
+            );
+            esl_pwm_update_rgb(&pwm_ctx);
+            char hsv_msg[100];
+            snprintf(
+                hsv_msg, sizeof(hsv_msg), "HSV updated: H=%d, S=%d, V=%d",
+                pwm_ctx.hsv_state.hue,
+                pwm_ctx.hsv_state.saturation, pwm_ctx.hsv_state.
+                brightness
+            );
+            esl_usb_msg_write(hsv_msg, ESL_USB_MSG_TYPE_SUCCESS);
+            return ESL_SUCCESS;
+        } else {
+            esl_usb_msg_write("HSV values out of range (H: 0-360, S/V: 0-100)", ESL_USB_MSG_TYPE_ERROR);
+            return NULL;
+        }
+    } else {
+       esl_usb_msg_write("HSV command requires 3 args", ESL_USB_MSG_TYPE_ERROR);
+       return NULL;
+    }
+}
+
+esl_ret_code_t esl_cli_cmd_add_current_color(esl_cli_cmd_arg_t* args, int args_count) {
+    if (args_count == 1) {
+        if (sizeof(args[0]) > 32) {
+            esl_usb_msg_write("Color name has to be max 32 characters", ESL_USB_MSG_TYPE_ERROR);
+            return NULL;
+        }
+        esl_nvmc_saved_color_t new_color = {
+            .fields = {
+                .color_number = ++saved_colors_count,
+                .rgb_data = {
+                    .r_val = pwm_ctx.rgb_state.red,
+                    .g_val = pwm_ctx.rgb_state.green,
+                    .b_val = pwm_ctx.rgb_state.blue,
+                    .magic_number = ESL_NVMC_BYTE_VALID
+                },
+                .color_name = args[0]
+            }
+        };
+
+        esl_ret_code_t res = esl_nvmc_write(curr_addr, new_color.bits);
+        if (res != ESL_SUCCESS) {
+            esl_usb_msg_write("Couldn't save current color", ESL_USB_MSG_TYPE_ERROR);
+            return NULL;
+        }
+
+        char ret_msg[100];
+        snprintf(
+            ret_msg, sizeof(ret_msg), "New Color saved:\n\rName: %s, R=%d, G=%d, B=%d",
+            args[0],
+            pwm_ctx.rgb_state.red,
+            pwm_ctx.rgb_state.green,
+            pwm_ctx.rgb_state.blue
+        );
+        esl_usb_msg_write(ret_msg, ESL_USB_MSG_TYPE_SUCCESS);
+        return ESL_SUCCESS;
+    } else {
+       esl_usb_msg_write("Command requires 1 arg", ESL_USB_MSG_TYPE_ERROR);
+       return NULL;
+    }
 }
 
 void esl_usb_msg_write(const char* msg, esl_usb_msg_type_t msg_type) {
@@ -638,6 +640,5 @@ void esl_usb_msg_write(const char* msg, esl_usb_msg_type_t msg_type) {
                 /* Wait until we're ready to send the data again */
             }
         }
-        
     }
 }
