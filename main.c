@@ -1,9 +1,9 @@
 #include "esl_gpio.h"
 #include "esl_utils.h"
+#include "esl_pwm.h"
 
 #include "nrf_gpio.h"
 #include "nrf_delay.h"
-#include "nrfx_pwm.h"
 #include "nrfx_gpiote.h"
 #include "app_timer.h"
 #include "nrfx_clock.h"
@@ -27,16 +27,21 @@
 
 #define DEBOUNCE_DELAY              APP_TIMER_TICKS(DEBOUNCE_DELAY_MS)
 #define DOUBLE_CLICK_DELAY          APP_TIMER_TICKS(DOUBLE_CLICK_DELAY_MS)
+#define BOOTLOADER_START_ADDR       (0x000E0000)
+#define PAGE_SIZE                   (0x1000)
+#define APP_DATA_END_ADDR           BOOTLOADER_START_ADDR
+#define APP_DATA_START_ADDR         BOOTLOADER_START_ADDR - 3 * PAGE_SIZE
+#define SAVED_COLORS_PG_ADDR        APP_DATA_START_ADDR + PAGE_SIZE
+#define LAST_COLOR_PG_ADDR          APP_DATA_START_ADDR
 
-#define ANSI_COLOR_GREEN "\033[32m"
-#define ANSI_COLOR_RED   "\033[31m"
-#define ANSI_COLOR_YELLOW "\033[33m"
-#define ANSI_COLOR_WHITE "\033[37m"
-#define ANSI_COLOR_RESET "\033[0m"
+typedef enum {
+    ESL_SUCCESS                 = 0x0000,
+    ESL_ERR_NVMC_MEMORY_FULL    = 0x1000,
+    ESL_ERR_NVMC_NOT_WRITABLE   = 0x1001,
+    ESL_ERR_CLI_VALUE_ERROR     = 0x2000,
+} esl_ret_code_t;
 
-
-typedef union {
-    struct {
+typedef struct {
         uint8_t magic_number;
         uint8_t r_val;
         uint8_t g_val;
