@@ -39,6 +39,7 @@ typedef enum {
     ESL_ERR_NVMC_MEMORY_FULL    = 0x1000,
     ESL_ERR_NVMC_NOT_WRITABLE   = 0x1001,
     ESL_ERR_CLI_VALUE_ERROR     = 0x2000,
+    ESL_ERROR                   = 0x4000,
 } esl_ret_code_t;
 
 typedef struct {
@@ -52,11 +53,10 @@ typedef union {
     struct
     {
         esl_nvmc_rgb_data_t rgb_data;
-        uint32_t            color_number;
         char                color_name[32];
     } fields;
-    uint8_t bits[40];
-} esl_nvmc_saved_color_t;
+    uint8_t bits[36];
+} __attribute__((packed)) esl_nvmc_saved_color_t;
 
 typedef enum {
     ESL_USB_MSG_TYPE_SUCCESS    = 0,
@@ -120,23 +120,24 @@ void button_gpiote_handler(nrfx_gpiote_pin_t pin, nrf_gpiote_polarity_t action);
 void led_timer_timeout_handler(void * p_context);
 
 // NVMC Functions
-static esl_ret_code_t esl_nvmc_write(uint32_t addr, uint32_t bits);
+static esl_ret_code_t esl_nvmc_write(uint32_t addr, const void *src);
 static esl_ret_code_t esl_nvmc_save_curr_rgb();
+static esl_ret_code_t esl_nvmc_read(uint32_t addr, void *buffer, size_t size);
 
 // USB Functions
-void process_command();
+void esl_cli_process_cmd();
 void esl_usb_msg_write(const char* msg, esl_usb_msg_type_t msg_type);
 // static uint32_t esl_nvmc_get_curr_addr(uint32_t start_pg_addr);
 
 // Command handlers
 esl_ret_code_t esl_cli_cmd_rgb(esl_cli_cmd_arg_t *args, int arg_count);
 esl_ret_code_t esl_cli_cmd_hsv(esl_cli_cmd_arg_t *args, int arg_count);
-esl_ret_code_t esl_cli_cmd_add_rgb_color(esl_cli_cmd_arg_t *args, int arg_count);
-esl_ret_code_t esl_cli_cmd_add_hsv_color(esl_cli_cmd_arg_t *args, int arg_count);
+esl_ret_code_t esl_cli_cmd_add_rgb_color(esl_cli_cmd_arg_t *args, int arg_count) {return ESL_ERROR;}
+esl_ret_code_t esl_cli_cmd_add_hsv_color(esl_cli_cmd_arg_t *args, int arg_count) {return ESL_ERROR;}
 esl_ret_code_t esl_cli_cmd_add_current_color(esl_cli_cmd_arg_t *args, int arg_count);
 esl_ret_code_t esl_cli_cmd_list_colors(esl_cli_cmd_arg_t *args, int arg_count);
 esl_ret_code_t esl_cli_cmd_help(esl_cli_cmd_arg_t *args, int arg_count);
-esl_ret_code_t esl_cli_cmd_apply_color(esl_cli_cmd_arg_t *args, int arg_count);
+esl_ret_code_t esl_cli_cmd_apply_color(esl_cli_cmd_arg_t *args, int arg_count) {return ESL_ERROR;}
 
 esl_cli_cmd_handler_t esl_cli_cmd_handler_find(char* cmd_name);
 
@@ -175,9 +176,8 @@ int main(void) {
     NRF_LOG_DEFAULT_BACKENDS_INIT();
     cfg_pins();
     led_off_all();
-    esl_nvmc_init();
-
     esl_pwm_init(&pwm_ctx);
+    esl_nvmc_init();
 
     app_usbd_class_inst_t const * class_cdc_acm = app_usbd_cdc_acm_class_inst_get(&esl_usb_cdc_acm);
     ret = app_usbd_class_append(class_cdc_acm);
@@ -219,11 +219,12 @@ static void lfclk_request(void)
 
 static void esl_nvmc_init() {
     // Retrieve last saved color
-    esl_nvmc_saved_color_t * retrieved_rgb = (esl_nvmc_saved_color_t *)LAST_COLOR_PG_ADDR;
-    if (retrieved_rgb->fields.rgb_data.magic_number == ESL_NVMC_BYTE_VALID && retrieved_rgb->fields.color_number == 0) {
-        pwm_ctx.rgb_state.red = retrieved_rgb->fields.rgb_data.r_val;
-        pwm_ctx.rgb_state.green = retrieved_rgb->fields.rgb_data.g_val;
-        pwm_ctx.rgb_state.blue = retrieved_rgb->fields.rgb_data.b_val;
+    esl_nvmc_rgb_data_t retrieved_rgb;
+    esl_nvmc_read(LAST_COLOR_PG_ADDR, &retrieved_rgb, sizeof(retrieved_rgb));
+    if (retrieved_rgb.magic_number == ESL_NVMC_BYTE_VALID) {
+        pwm_ctx.rgb_state.red = retrieved_rgb.r_val;
+        pwm_ctx.rgb_state.green = retrieved_rgb.g_val;
+        pwm_ctx.rgb_state.blue = retrieved_rgb.b_val;
 
         rgb_to_hsv(
             pwm_ctx.rgb_state.red,
@@ -233,12 +234,14 @@ static void esl_nvmc_init() {
             &pwm_ctx.hsv_state.saturation,
             &pwm_ctx.hsv_state.brightness
         );
-    } else {
+        esl_pwm_update_rgb(&pwm_ctx);
+
+    } else if (retrieved_rgb.magic_number != ESL_NVMC_BYTE_VALID) {
         nrfx_nvmc_page_erase(LAST_COLOR_PG_ADDR);
     }
 
     // Retrieve all user saved colors
-    saved_colors = (esl_nvmc_saved_color_t *)malloc(APP_DATA_END_ADDR - APP_DATA_START_ADDR);
+    saved_colors = (esl_nvmc_saved_color_t *)malloc(PAGE_SIZE);
 
     if (saved_colors == NULL) {
         NRF_LOG_ERROR("Memory allocation failed!");
@@ -246,13 +249,16 @@ static void esl_nvmc_init() {
     }
 
     while (curr_addr < SAVED_COLORS_PG_ADDR + PAGE_SIZE) {
-        esl_nvmc_saved_color_t * retrieved_color = (esl_nvmc_saved_color_t*)curr_addr;
+        esl_nvmc_saved_color_t retrieved_color;
+        esl_nvmc_read(curr_addr, &retrieved_color, sizeof(retrieved_color));
 
-        if (retrieved_color->fields.rgb_data.magic_number == ESL_NVMC_BYTE_VALID) {
-            saved_colors[saved_colors_count++] = *retrieved_color;
+        if (retrieved_color.fields.rgb_data.magic_number == ESL_NVMC_BYTE_VALID) {
+            saved_colors[saved_colors_count++] = retrieved_color;
             curr_addr += sizeof(esl_nvmc_saved_color_t);
-        } else if (retrieved_color->fields.rgb_data.magic_number == ESL_NVMC_BYTE_NOT_INIT) {
-            NRF_LOG_INFO("Retrieved all saved colors!");
+            NRF_LOG_INFO("Color name: %s", NRF_LOG_PUSH(retrieved_color.fields.color_name));
+            NRF_LOG_INFO("r: %d, g: %d, b: %d", retrieved_color.fields.rgb_data.r_val, retrieved_color.fields.rgb_data.g_val, retrieved_color.fields.rgb_data.b_val);
+        } else if (retrieved_color.fields.rgb_data.magic_number == ESL_NVMC_BYTE_NOT_INIT) {
+            NRF_LOG_INFO("Retrieved all saved colors! count: %d", saved_colors_count);
             return;
         } else {
             NRF_LOG_ERROR("Memory Corrupted");
@@ -291,7 +297,10 @@ void debounce_timeout_handler(void *p_context) {
         awaiting_second_click = false;
         if (pwm_ctx.current_input_mode++ == ESL_PWM_IN_BRIGHTNESS) {
             pwm_ctx.current_input_mode = ESL_PWM_IN_NO_INPUT;
-            esl_nvmc_save_curr_rgb();
+            esl_ret_code_t res = esl_nvmc_save_curr_rgb();
+            if (res == ESL_SUCCESS) {
+                NRF_LOG_INFO("Current Color saved");
+            }
         }
         if (pwm_ctx.current_blink_mode++ == ESL_PWM_CONST_ON) {
             pwm_ctx.current_blink_mode = ESL_PWM_CONST_OFF;
@@ -340,7 +349,7 @@ static void esl_usb_ev_handler(app_usbd_class_inst_t const * p_inst,
 
                 *current_command = '\0';
                 current_command = command_buffer;
-                process_command();
+                esl_cli_process_cmd();
             }
             else
             {
@@ -391,35 +400,54 @@ void led_timer_timeout_handler(void * p_context) {
 }
 
 // NVMC
-static esl_ret_code_t esl_nvmc_write(uint32_t addr, uint32_t bits)
+static esl_ret_code_t esl_nvmc_write(uint32_t addr, void const * src)
 {
-    if (!nrfx_nvmc_word_writable_check(addr, bits)) {
+    size_t size = sizeof(src);
+    if (!nrfx_nvmc_word_writable_check(addr, size)) {
         return ESL_ERR_NVMC_NOT_WRITABLE;
     }
-    uint32_t num_words = (bits + 31) / 32;
-    nrfx_nvmc_words_write(addr, bits, num_words);
+
+    nrfx_nvmc_words_write(addr, src, 9);
 
     while (!nrfx_nvmc_write_done_check()) {}
 
     return ESL_SUCCESS;
 }
 
+static esl_ret_code_t esl_nvmc_read(uint32_t addr, void *buffer, size_t size) {
+    if (addr % sizeof(uint32_t) != 0) {
+        NRF_LOG_ERROR("Address is not aligned!");
+        return ESL_ERROR;
+    }
+    memcpy(buffer, (const void *)addr, size);
+    return ESL_SUCCESS;
+}
+
+
 static esl_ret_code_t esl_nvmc_save_curr_rgb() {
-    esl_nvmc_saved_color_t curr_rgb = {
-        .fields = {
-            .color_number = 0,
-            .rgb_data = {
-                .magic_number = ESL_NVMC_BYTE_VALID,
-                .r_val = pwm_ctx.rgb_state.red,
-                .g_val = pwm_ctx.rgb_state.green,
-                .b_val = pwm_ctx.rgb_state.blue
-            },
-            .color_name = "LastColor"
-        }
+    esl_nvmc_rgb_data_t curr_rgb = {
+        .magic_number = ESL_NVMC_BYTE_VALID,
+        .r_val = pwm_ctx.rgb_state.red,
+        .g_val = pwm_ctx.rgb_state.green,
+        .b_val = pwm_ctx.rgb_state.blue
     };
 
+    uint32_t bits = 0;
+    memcpy(&bits, &curr_rgb, sizeof(curr_rgb));
+
     nrfx_nvmc_page_erase(LAST_COLOR_PG_ADDR);
-    esl_nvmc_write(LAST_COLOR_PG_ADDR, curr_rgb.bits);
+
+    if (nrfx_nvmc_word_writable_check(LAST_COLOR_PG_ADDR, bits)) {
+        nrfx_nvmc_word_write(LAST_COLOR_PG_ADDR, bits);
+
+        NRF_LOG_INFO("Address: 0x%x", LAST_COLOR_PG_ADDR);
+        NRF_LOG_INFO("RGB Data: %d %d %d", curr_rgb.r_val, curr_rgb.g_val, curr_rgb.b_val);
+        return ESL_SUCCESS;
+    } else {
+        NRF_LOG_ERROR("Not writable");
+    }
+
+    return ESL_ERROR;
 }
 
 // USB
@@ -433,7 +461,6 @@ esl_cli_cmd_handler_t esl_cli_cmd_handler_find(char* cmd_name) {
             return command_table[cmd_idx].handler;
         }
     }
-
     return NULL;
 }
 
@@ -456,18 +483,19 @@ void esl_cli_process_cmd() {
     int arg_count = 0;
 
     // Parse values
-    while (token != NULL) {
+    while ((token = strtok(NULL, " ")) != NULL) {
         if (arg_count >= ESL_CLI_CMD_MAX_ARGS) {
             esl_usb_msg_write("Too many args", ESL_USB_MSG_TYPE_ERROR);
             return;
         }
+        NRF_LOG_INFO("args[%d]: %s", arg_count, NRF_LOG_PUSH(token));
         args[arg_count] = token;
         arg_count++;
-        token = strtok(NULL, " ");
     }
 
     esl_cli_cmd_handler_t cmd_handler = esl_cli_cmd_handler_find(command);
     if (cmd_handler) {
+        NRF_LOG_INFO("Args count: %d", arg_count);
         esl_ret_code_t res = cmd_handler(args, arg_count);
         if (res != ESL_SUCCESS) {
             esl_usb_msg_write("Error occurred", ESL_USB_MSG_TYPE_ERROR);
@@ -515,12 +543,13 @@ esl_ret_code_t esl_cli_cmd_rgb(esl_cli_cmd_arg_t* args, int args_count) {
             return ESL_SUCCESS;
         } else {
             esl_usb_msg_write("RGB values out of range (0-255)", ESL_USB_MSG_TYPE_ERROR);
-            return NULL;
+            return ESL_ERROR;
         }
     } else {
        esl_usb_msg_write("RGB command requires 3 args", ESL_USB_MSG_TYPE_ERROR);
-       return NULL;
+       return ESL_ERROR;
     }
+    return ESL_ERROR;
 }
 
 esl_ret_code_t esl_cli_cmd_hsv(esl_cli_cmd_arg_t* args, int args_count) {
@@ -556,57 +585,108 @@ esl_ret_code_t esl_cli_cmd_hsv(esl_cli_cmd_arg_t* args, int args_count) {
             return ESL_SUCCESS;
         } else {
             esl_usb_msg_write("HSV values out of range (H: 0-360, S/V: 0-100)", ESL_USB_MSG_TYPE_ERROR);
-            return NULL;
+            return ESL_ERROR;
         }
     } else {
        esl_usb_msg_write("HSV command requires 3 args", ESL_USB_MSG_TYPE_ERROR);
-       return NULL;
+       return ESL_ERROR;
     }
+    return ESL_ERROR;
 }
 
 esl_ret_code_t esl_cli_cmd_add_current_color(esl_cli_cmd_arg_t* args, int args_count) {
     if (args_count == 1) {
         if (sizeof(args[0]) > 32) {
             esl_usb_msg_write("Color name has to be max 32 characters", ESL_USB_MSG_TYPE_ERROR);
-            return NULL;
+            return ESL_ERROR;
         }
         esl_nvmc_saved_color_t new_color = {
             .fields = {
-                .color_number = ++saved_colors_count,
                 .rgb_data = {
                     .r_val = pwm_ctx.rgb_state.red,
                     .g_val = pwm_ctx.rgb_state.green,
                     .b_val = pwm_ctx.rgb_state.blue,
                     .magic_number = ESL_NVMC_BYTE_VALID
                 },
-                .color_name = args[0]
             }
         };
 
-        esl_ret_code_t res = esl_nvmc_write(curr_addr, new_color.bits);
+        strncpy(new_color.fields.color_name, args[0], sizeof(new_color.fields.color_name) - 1);
+        new_color.fields.color_name[sizeof(new_color.fields.color_name) - 1] = '\0';
+
+        esl_ret_code_t res = esl_nvmc_write(curr_addr, &new_color);
         if (res != ESL_SUCCESS) {
             esl_usb_msg_write("Couldn't save current color", ESL_USB_MSG_TYPE_ERROR);
-            return NULL;
+            return ESL_ERROR;
         }
+        saved_colors[saved_colors_count++] = new_color;
+        curr_addr += sizeof(esl_nvmc_saved_color_t);
 
         char ret_msg[100];
         snprintf(
             ret_msg, sizeof(ret_msg), "New Color saved:\n\rName: %s, R=%d, G=%d, B=%d",
-            args[0],
-            pwm_ctx.rgb_state.red,
-            pwm_ctx.rgb_state.green,
-            pwm_ctx.rgb_state.blue
+            new_color.fields.color_name,
+            new_color.fields.rgb_data.r_val,
+            new_color.fields.rgb_data.g_val,
+            new_color.fields.rgb_data.b_val
         );
         esl_usb_msg_write(ret_msg, ESL_USB_MSG_TYPE_SUCCESS);
         return ESL_SUCCESS;
     } else {
        esl_usb_msg_write("Command requires 1 arg", ESL_USB_MSG_TYPE_ERROR);
-       return NULL;
+       return ESL_ERROR;
     }
+    return ESL_ERROR;
+}
+
+esl_ret_code_t esl_cli_cmd_list_colors(esl_cli_cmd_arg_t *args, int arg_count) {
+    if (arg_count == 0) {
+        NRF_LOG_INFO("Colors count: %d", saved_colors_count);
+        char ret_msg[1024] = "Saved Colors:\n\r";
+        for (int color_idx = 0; color_idx < saved_colors_count; ++color_idx) {
+            esl_nvmc_saved_color_t color = saved_colors[color_idx];
+            NRF_LOG_INFO("Current idx: %d", color_idx);
+            NRF_LOG_INFO("Color Name: %s", NRF_LOG_PUSH(color.fields.color_name));
+
+            char temp_buf[100];
+            snprintf(
+                temp_buf, sizeof(temp_buf), "%d. Name: %s | R: %d, G: %d, B: %d\n\r",
+                color_idx + 1,
+                color.fields.color_name,
+                color.fields.rgb_data.r_val,
+                color.fields.rgb_data.g_val,
+                color.fields.rgb_data.b_val
+            );
+            strncat(ret_msg, temp_buf, sizeof(ret_msg) - strlen(ret_msg) - 1);
+        }
+        esl_usb_msg_write(ret_msg, ESL_USB_MSG_TYPE_SUCCESS);
+        return ESL_SUCCESS;
+    } else {
+        esl_usb_msg_write("Command requires 0 args", ESL_USB_MSG_TYPE_ERROR);
+        return ESL_ERROR;
+    }
+    
+    return ESL_ERROR;
+}
+
+esl_ret_code_t esl_cli_cmd_help(esl_cli_cmd_arg_t *args, int arg_count) {
+    if (arg_count != 0) {
+        esl_usb_msg_write("help: No arguments expected", ESL_USB_MSG_TYPE_ERROR);
+        return ESL_ERROR;
+    }
+
+    char help_msg[1024] = "Available Commands:\n\r";
+
+    for (size_t cmd_idx = 0; cmd_idx < COMMAND_TABLE_SIZE; cmd_idx++) {
+        strncat(help_msg, command_table[cmd_idx].command_description, sizeof(help_msg) - strlen(help_msg) - 1);
+    }
+
+    esl_usb_msg_write(help_msg, ESL_USB_MSG_TYPE_SUCCESS);
+    return ESL_SUCCESS;
 }
 
 void esl_usb_msg_write(const char* msg, esl_usb_msg_type_t msg_type) {
-    char formatted_msg[1024]; // Buffer for the formatted message
+    char formatted_msg[1500]; // Buffer for the formatted message
 
     switch (msg_type) {
     case ESL_USB_MSG_TYPE_INPUT:

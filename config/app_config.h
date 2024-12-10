@@ -140,11 +140,11 @@
 #endif
 
 #ifndef DEBOUNCE_DELAY_MS
-#define DEBOUNCE_DELAY_MS           20
+#define DEBOUNCE_DELAY_MS           50
 #endif
 
 #ifndef DOUBLE_CLICK_DELAY_MS
-#define DOUBLE_CLICK_DELAY_MS       200
+#define DOUBLE_CLICK_DELAY_MS       300
 #endif
 
 #ifndef ESL_NVMC_BYTE_VALID
